@@ -1,0 +1,1383 @@
+/* Dashboard page scoped styles */
+
+.dashboard-root {
+  min-height: 100vh;
+  padding: 1.5rem;
+  /* p-6 */
+  background-color: var(--bg-main);
+  transition: background-color 300ms, color 300ms;
+}
+
+/* Theme variables (light defaults) */
+:root {
+  --bg-main: #f8fafc;
+  /* slate-50 */
+  --bg-panel: #ffffff;
+  /* panel background */
+  --text-primary: #0f172a;
+  /* main text */
+  --text-secondary: #64748b;
+  /* muted text */
+  --muted: #475569;
+  /* subtle text/icon */
+  --border: #e2e8f0;
+  /* panel borders */
+  --card-shadow: rgba(2, 6, 23, 0.04);
+  --mini-bar-1-start: #E8F5E9;
+  --mini-bar-1-end: #C8E6C9;
+  --accent-green: #2E7D32;
+  --accent-green-strong: #04C40A;
+  --accent-blue-1: #06b6d4;
+  --accent-blue-2: #0891b2;
+  --accent-blue-grad: linear-gradient(90deg, var(--accent-blue-1), var(--accent-blue-2));
+  --scroll-thumb: #cbd5e1;
+
+  /* Chart colors for light mode - using green theme */
+  --chart-bg: #f8fdf8;
+  --chart-bar-bg: #2E7D32;
+  --chart-bar-today: linear-gradient(90deg, #04C40A, #2E7D32);
+  --chart-text: #475569;
+  --chart-donut-bg: #fff;
+  --chart-donut-text: #333;
+  --chart-legend-text: #475569;
+  --chart-simple-bg: #2E7D32;
+  --chart-simple-bar-bg: #f1f5f9;
+  --chart-simple-bar-fill: linear-gradient(90deg, #2E7D32, #04C40A);
+  --chart-simple-text: #0f172a;
+}
+
+.dark .dashboard-root {
+  background-color: var(--dark-bg-main);
+}
+
+/* Dark mode chart variables */
+.dark {
+  --chart-bg: #1e293b;
+  --chart-bar-bg: #04C40A;
+  --chart-bar-today: linear-gradient(90deg, #04C40A, #2E7D32);
+  --chart-text: var(--dark-text-secondary);
+  --chart-donut-bg: var(--dark-bg-panel);
+  --chart-donut-text: var(--dark-text-primary);
+  --chart-legend-text: var(--dark-text-secondary);
+  --chart-simple-bg: #1C2B1C;
+  --chart-simple-bar-bg: #1e293b;
+  --chart-simple-bar-fill: linear-gradient(90deg, #04C40A, #2E7D32);
+  --chart-simple-text: var(--dark-text-primary);
+}
+
+.dashboard-container {
+  max-width: 80rem;
+  /* max-w-7xl */
+  margin-left: auto;
+  margin-right: auto;
+}
+
+/* Phone optimizations */
+@media (max-width: 640px) {
+  .dashboard-root {
+    padding: 1rem;
+  }
+}
+
+.dark .dashboard-root {
+  background-color: var(--dark-bg-main);
+  /* #090909 */
+}
+
+/* Greeting block under breadcrumbs */
+.greet-block {
+  margin-bottom: 1.25rem;
+}
+
+.greet-title {
+  margin: 0 0 0.25rem 0;
+  font-size: 1.875rem;
+  /* text-3xl */
+  line-height: 2.25rem;
+  font-weight: 800;
+  /* extrabold */
+  color: #0f172a;
+  /* slate-900 */
+}
+
+@media (max-width: 640px) {
+  .greet-title {
+    font-size: 1.5rem;
+    line-height: 2rem;
+  }
+}
+
+.dark .greet-title {
+  color: var(--dark-text-primary);
+}
+
+.greet-sub {
+  margin: 0;
+  font-size: 0.9375rem;
+  color: #64748b;
+}
+
+.dark .greet-sub {
+  color: var(--dark-text-secondary);
+}
+
+.dashboard-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 1.5rem;
+  /* gap-6 */
+  align-items: stretch;
+  margin-bottom: 2rem;
+  /* mb-8 */
+}
+
+@media (min-width: 768px) {
+
+  /* md */
+  .dashboard-grid {
+    grid-template-columns: repeat(12, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 1024px) {
+
+  /* lg */
+  .dashboard-grid {
+    grid-template-columns: repeat(12, minmax(0, 1fr));
+  }
+}
+
+.section-title {
+  margin: 0;
+  font-weight: 600;
+  color: #0f172a;
+  /* slate-900 */
+  font-size: 1.125rem;
+  /* text-lg */
+}
+
+@media (max-width: 640px) {
+  .section-title {
+    font-size: 1rem;
+  }
+}
+
+.dark .section-title {
+  color: var(--dark-text-primary);
+}
+
+.link-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-size: 0.875rem;
+  color: #475569;
+  /* slate-600 */
+  transition: color 150ms;
+}
+
+.link-button:hover {
+  color: #0f172a;
+}
+
+.dark .link-button {
+  color: var(--dark-text-secondary);
+}
+
+.dark .link-button:hover {
+  color: var(--dark-text-primary);
+}
+
+/* Panels */
+.panel {
+  background-color: #ffffff;
+  border: 1px solid #e2e8f0;
+  /* slate-200 */
+  border-radius: 0.75rem;
+  /* rounded-xl */
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+}
+
+.dark .panel {
+  background-color: var(--dark-bg-panel);
+  border-color: var(--dark-border, #2E2E2E);
+}
+
+.panel-padded {
+  padding: 1.25rem;
+  /* p-5 */
+}
+
+.panel-padded-lg {
+  padding: 1.5rem;
+  /* p-6 */
+}
+
+@media (max-width: 640px) {
+  .panel-padded {
+    padding: 1rem;
+  }
+
+  .panel-padded-lg {
+    padding: 1rem;
+  }
+}
+
+/* Next Due panel */
+.nd-panel {
+  width: 100%;
+}
+
+.nd-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.75rem;
+}
+
+/* Slightly tighter padding for Next Due panel only */
+.nd-panel.panel-padded-lg {
+  padding: 1rem;
+}
+
+/* Next Due header actions */
+.nd-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.nd-view-all {
+  padding: 0.375rem 0.875rem;
+  /* slightly compact to fit header */
+}
+
+/* Next Due navigation buttons */
+.nd-nav {
+  display: flex;
+  gap: 0.25rem;
+}
+
+.nd-nav-btn {
+  width: 2rem;
+  height: 2rem;
+  border-radius: 9999px;
+  border: none;
+  background-color: transparent;
+  color: #475569;
+  cursor: pointer;
+  transition: color 150ms;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.nd-nav-btn:hover {
+  color: #2E7D32;
+}
+
+.dark .nd-nav-btn {
+  border: none;
+  background-color: transparent;
+  color: #94a3b8;
+}
+
+.dark .nd-nav-btn:hover {
+  color: var(--dark-green-main, #04C40A);
+}
+
+/* Next Due list */
+.due-list-container {
+  max-height: 280px;
+  /* Reduced to shorten section height */
+  overflow-y: auto;
+  padding-right: 0.25rem;
+  cursor: grab;
+}
+
+.due-list-container:active {
+  cursor: grabbing;
+}
+
+@media (max-width: 640px) {
+  .due-list-container {
+    max-height: 320px;
+  }
+}
+
+@media (min-width: 768px) and (max-width: 1023.98px) {
+  .due-list-container {
+    max-height: 300px;
+  }
+}
+
+/* Custom scrollbar styling */
+.due-list-container::-webkit-scrollbar {
+  width: 6px;
+}
+
+.due-list-container::-webkit-scrollbar-track {
+  background: #f1f5f9;
+  border-radius: 3px;
+}
+
+.dark .due-list-container::-webkit-scrollbar-track {
+  background: #1e293b;
+}
+
+.due-list-container::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 3px;
+}
+
+.dark .due-list-container::-webkit-scrollbar-thumb {
+  background: #475569;
+}
+
+.due-list-container::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
+.dark .due-list-container::-webkit-scrollbar-thumb:hover {
+  background: #64748b;
+}
+
+.due-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.due-card {
+  background: inherit;
+  border: 1px solid #e2e8f0;
+  border-radius: 0.75rem;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+  padding: 1.5rem;
+  background-color: #fff;
+}
+
+@media (max-width: 640px) {
+  .due-card {
+    padding: 1rem;
+  }
+}
+
+.dark .due-card {
+  background-color: #090909;
+  border-color: var(--dark-border, #2E2E2E);
+}
+
+/* Make whole card clickable when wrapped in a link */
+.due-card-link {
+  display: block;
+  text-decoration: none;
+  cursor: pointer;
+  transition: transform 120ms ease, box-shadow 120ms ease, background-color 120ms ease, border-color 120ms ease, color 120ms ease;
+}
+
+.due-card-link:hover {
+  transform: translateX(4px);
+  box-shadow: 0 6px 16px rgba(2, 6, 23, 0.08);
+  /* Match sidebar hover chip in light mode */
+  border-color: #E8F5E9;
+  background-color: #E8F5E9;
+}
+
+.dark .due-card-link:hover {
+  border-color: var(--dark-green-main, #04C40A);
+  background-color: var(--dark-green-bg, #1C2B1C);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.35);
+}
+
+.due-card-layout {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1.5rem;
+}
+
+@media (max-width: 640px) {
+  .due-card-layout {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.5rem;
+  }
+}
+
+.due-card-left {
+  flex: 1 1 0;
+  min-width: 0;
+  /* Allow title/time to use available space; constrain only on larger screens */
+  max-width: none;
+}
+
+@media (min-width: 640px) {
+  .due-card-left {
+    max-width: 50%;
+  }
+}
+
+@media (min-width: 1024px) {
+  .due-card-left {
+    max-width: 20%;
+  }
+}
+
+@media (min-width: 768px) and (max-width: 1023.98px) {
+  .due-card-left {
+    max-width: 40%;
+  }
+}
+
+.due-card-center {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto;
+}
+
+@media (max-width: 640px) {
+  .due-card-center {
+    margin: 0;
+    justify-content: flex-start;
+  }
+}
+
+.due-card-right {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  min-width: 100px;
+}
+
+@media (max-width: 640px) {
+  .due-card-right {
+    display: none;
+  }
+}
+
+/* Arrow chip indicator on the right */
+.arrow-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.25rem;
+  height: 2.25rem;
+  border-radius: 9999px;
+  border: none;
+  background-color: transparent;
+  color: #475569;
+  transition: color 150ms, transform 120ms;
+}
+
+.due-card-link:hover .arrow-chip {
+  color: #2E7D32;
+  transform: translateX(2px);
+}
+
+.dark .arrow-chip {
+  background-color: transparent;
+  color: #94a3b8;
+  border: none;
+}
+
+.dark .due-card-link:hover .arrow-chip {
+  color: var(--dark-green-main, #04C40A);
+}
+
+.title-truncate {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 600;
+  color: #0f172a;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@media (max-width: 640px) {
+  .title-truncate {
+    font-size: 0.9375rem;
+  }
+}
+
+.dark .title-truncate {
+  color: var(--dark-text-primary);
+}
+
+.due-time {
+  margin: 0.25rem 0 0;
+  font-size: 0.875rem;
+  color: #475569;
+}
+
+.dark .due-time {
+  color: var(--dark-text-secondary);
+}
+
+.due-time.critical {
+  color: #dc2626;
+}
+
+.dark .due-time.critical {
+  color: #fca5a5;
+}
+
+.due-time.soon {
+  color: #d97706;
+}
+
+.dark .due-time.soon {
+  color: #fcd34d;
+}
+
+.type-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.375rem 0.875rem;
+  /* pill padding */
+  font-size: 0.875rem;
+  /* match due-time scale */
+  font-weight: 600;
+  color: #2E7D32;
+  /* text color for light mode */
+  background: #E8F5E9;
+  /* background color for light mode */
+  border-radius: 9999px;
+  /* fully rounded pill */
+  white-space: nowrap;
+}
+
+.dark .type-badge {
+  color: #04C40A;
+  /* --dark-green-main */
+  background: #1C2B1C;
+  /* --dark-green-bg */
+}
+
+.pill-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.5rem 1rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  border-radius: 9999px;
+  text-decoration: none;
+  border: 1px solid #E8F5E9;
+  background-color: #E8F5E9;
+  color: #2E7D32;
+  transition: background-color 150ms, color 150ms, border-color 150ms;
+}
+
+.pill-button:hover {
+  background-color: #C8E6C9;
+}
+
+.dark .pill-button {
+  /* Use the design token green chip colors in dark mode */
+  background-color: var(--dark-green-bg, #1C2B1C);
+  color: var(--dark-green-main, #04C40A);
+  border-color: var(--dark-green-main, #04C40A);
+}
+
+.dark .pill-button:focus-visible {
+  outline: 2px solid rgba(4, 196, 10, 0.18);
+  outline-offset: 2px;
+}
+
+.dark .pill-button:hover {
+  background-color: var(--dark-green-main, #04C40A);
+  color: #ffffff;
+  border-color: var(--dark-green-main, #04C40A);
+}
+
+/* Quick actions */
+.qa-panel {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.qa-group {
+  margin-top: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  flex: 1;
+}
+
+/* On large screens, make buttons expand to fill available vertical space */
+@media (min-width: 1024px) {
+  .qa-group {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+
+  .qa-link,
+  .qa-link[aria-disabled] {
+    flex: 1;
+    /* distribute space evenly among buttons */
+    min-height: 3.5rem;
+    /* ensure minimum height for better appearance */
+  }
+}
+
+.qa-link,
+.qa-link[aria-disabled] {
+  @media (min-width: 768px) and (max-width: 1023.98px) {
+    .sd-row {
+      grid-auto-columns: minmax(320px, 1fr);
+    }
+  }
+
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem 1rem;
+  border-radius: 0.75rem;
+  text-decoration: none;
+  border: 1px solid #e2e8f0;
+  background-color: #f8fafc;
+  transition: background-color 150ms,
+  color 150ms,
+  border-color 150ms,
+  opacity 150ms,
+  transform 150ms;
+}
+
+@media (max-width: 640px) {
+
+  .qa-link,
+  .qa-link[aria-disabled] {
+    padding: 0.625rem 0.875rem;
+  }
+}
+
+.qa-link:hover {
+  /* Match sidebar hover chip in light mode */
+  background-color: #E8F5E9;
+  border-color: #E8F5E9;
+  transform: translateX(4px);
+}
+
+.qa-link:hover .qa-text,
+.qa-link:hover .qa-icon {
+  color: #2E7D32;
+}
+
+.qa-link[aria-disabled] {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.dark .qa-link,
+.dark .qa-link[aria-disabled] {
+  border-color: var(--dark-border, #2E2E2E);
+  background-color: var(--dark-bg-panel, #090909);
+}
+
+.dark .qa-link:hover {
+  background-color: var(--dark-green-bg, #1C2B1C);
+}
+
+.dark .qa-link:hover .qa-text,
+.dark .qa-link:hover .qa-icon {
+  color: var(--dark-green-main, #04C40A);
+}
+
+/* Chip variant for Quick Actions (e.g., Create Flashcards) */
+.qa-chip {
+  background: #E8F5E9;
+  border-color: #E8F5E9;
+  color: #2E7D32;
+}
+
+.qa-chip .qa-text {
+  color: #2E7D32;
+}
+
+.qa-chip .qa-icon {
+  color: #2E7D32;
+  background: #fff;
+  border-color: #cdebd2;
+}
+
+.qa-chip:hover {
+  background: #C8E6C9;
+  border-color: #C8E6C9;
+}
+
+.dark .qa-chip {
+  /* Revert to the standard dark QA link colors (not a green chip by default) */
+  background: var(--dark-bg-panel, #090909);
+  border-color: var(--dark-border, #2E2E2E);
+}
+
+.dark .qa-chip .qa-text,
+.dark .qa-chip .qa-icon {
+  color: var(--dark-text-primary);
+}
+
+.dark .qa-chip:hover {
+  /* Keep green as a hover/active affordance */
+  background: var(--dark-green-bg, #1C2B1C);
+  border-color: var(--dark-green-main, #04C40A);
+}
+
+.dark .qa-chip:hover .qa-text,
+.dark .qa-chip:hover .qa-icon {
+  color: var(--dark-green-main, #04C40A);
+}
+
+.qa-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  border-radius: 0.5rem;
+  background-color: #fff;
+  border: 1px solid #e2e8f0;
+  color: #334155;
+}
+
+.dark .qa-icon {
+  background-color: #090909;
+  border-color: var(--dark-border, #2E2E2E);
+  color: #e2e8f0;
+}
+
+.qa-text {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #0f172a;
+}
+
+.dark .qa-text {
+  color: var(--dark-text-primary);
+}
+
+/* Study decks */
+/* Remove panel background container; section now sits on page bg */
+.sd-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.25rem 0;
+  margin-top: 0.5rem;
+  margin-bottom: 0.75rem;
+}
+
+.sd-title-row {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.sd-title {
+  margin: 0;
+  font-weight: 700;
+  color: #0f172a;
+  font-size: 1.5rem;
+}
+
+.dark .sd-title {
+  color: var(--dark-text-primary);
+}
+
+@media (max-width: 640px) {
+  .sd-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.5rem;
+  }
+
+  .sd-title {
+    font-size: 1.25rem;
+  }
+
+  .sd-title-row {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.5rem;
+    width: 100%;
+  }
+}
+
+.sd-tabs {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.sd-tab {
+  padding: 0.25rem 0.625rem;
+  border-radius: 9999px;
+  font-size: 0.75rem;
+  border: 1px solid #e2e8f0;
+  color: #475569;
+  background: transparent;
+  cursor: pointer;
+  transition: background-color 150ms, color 150ms, border-color 150ms;
+}
+
+.sd-tab:hover {
+  background-color: #E8F5E9;
+  color: #2E7D32;
+  border-color: #E8F5E9;
+}
+
+.dark .sd-tab {
+  border-color: var(--dark-border, #2E2E2E);
+  color: var(--dark-text-secondary);
+}
+
+.dark .sd-tab:hover {
+  background-color: var(--dark-green-bg, #1C2B1C);
+  color: var(--dark-green-main, #04C40A);
+}
+
+.sd-tab--active {
+  background-color: #E8F5E9;
+  color: #2E7D32;
+  border: 1px solid #E8F5E9;
+}
+
+.dark .sd-tab--active {
+  background-color: var(--dark-green-bg);
+  color: var(--dark-green-main);
+  border: 1px solid var(--dark-green-main);
+}
+
+/* Horizontal scroll row for decks */
+.sd-row {
+  display: grid;
+  grid-auto-flow: column;
+  /* Use fixed column widths so cards don't stretch when there are only 1-2 */
+  grid-auto-columns: 260px;
+  gap: 1rem;
+  overflow-x: auto;
+  padding-bottom: 0.5rem;
+  scroll-snap-type: x mandatory;
+  cursor: grab;
+  scroll-behavior: smooth;
+}
+
+.sd-row:active {
+  cursor: grabbing;
+}
+
+@media (max-width: 640px) {
+  .sd-row {
+    grid-auto-columns: 85%;
+  }
+}
+
+@media (min-width: 640px) {
+  .sd-row {
+    grid-auto-columns: 300px;
+  }
+}
+
+@media (min-width: 1024px) {
+  .sd-row {
+    grid-auto-columns: 340px;
+  }
+}
+
+.sd-card {
+  border: 1px solid #e2e8f0;
+  border-radius: 0.75rem;
+  background-color: #f8fafc;
+  overflow: hidden;
+  scroll-snap-align: start;
+  display: flex;
+  flex-direction: column;
+  max-height: 400px;
+}
+
+.dark .sd-card {
+  border-color: var(--dark-border, #2E2E2E);
+  background-color: var(--dark-bg-panel, #090909);
+}
+
+.sd-cover {
+  height: 12rem;
+  background-color: rgba(226, 232, 240, 0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #64748b;
+  font-size: 0.875rem;
+  flex-shrink: 0;
+}
+
+@media (max-width: 640px) {
+  .sd-cover {
+    height: 10rem;
+  }
+}
+
+.dark .sd-cover {
+  background-color: #000000;
+  color: var(--dark-text-secondary, #BCBCBC);
+}
+
+.sd-body {
+  padding: 1rem;
+  overflow-y: auto;
+  flex: 1;
+}
+
+/* Custom scrollbar for deck cards */
+.sd-body::-webkit-scrollbar {
+  width: 4px;
+}
+
+.sd-body::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.sd-body::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 2px;
+}
+
+.dark .sd-body::-webkit-scrollbar-thumb {
+  background: #475569;
+}
+
+.sd-body::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
+.dark .sd-body::-webkit-scrollbar-thumb:hover {
+  background: #64748b;
+}
+
+.sd-card-title {
+  margin: 0;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #0f172a;
+}
+
+.dark .sd-card-title {
+  color: var(--dark-text-primary);
+}
+
+.sd-card-desc {
+  margin: 0.25rem 0 0;
+  font-size: 0.75rem;
+  color: #64748b;
+}
+
+.dark .sd-card-desc {
+  color: var(--dark-text-secondary);
+}
+
+.sd-meta {
+  margin-top: 1rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 0.6875rem;
+  color: #64748b;
+}
+
+.dark .sd-meta {
+  color: var(--dark-text-secondary);
+}
+
+/* Deck navigation buttons */
+.sd-nav {
+  display: flex;
+  gap: 0.25rem;
+}
+
+@media (max-width: 640px) {
+  .sd-nav {
+    display: flex;
+    align-self: flex-end;
+  }
+}
+
+.sd-nav-btn {
+  width: 2rem;
+  height: 2rem;
+  border-radius: 9999px;
+  border: none;
+  background-color: transparent;
+  color: #475569;
+  cursor: pointer;
+  transition: color 150ms;
+}
+
+.sd-nav-btn:hover {
+  color: #2E7D32;
+}
+
+.dark .sd-nav-btn {
+  border: none;
+  background-color: transparent;
+  color: #94a3b8;
+}
+
+.dark .sd-nav-btn:hover {
+  color: var(--dark-green-main, #04C40A);
+}
+
+/* Responsive columns for sections */
+.col-span-8 {
+  grid-column: span 12 / span 12;
+}
+
+.col-span-4 {
+  grid-column: span 12 / span 12;
+}
+
+@media (min-width: 768px) {
+  .col-span-8 {
+    grid-column: span 8 / span 8;
+  }
+
+  .col-span-4 {
+    grid-column: span 4 / span 4;
+  }
+}
+
+@media (min-width: 1024px) {
+  .col-span-8 {
+    grid-column: span 8 / span 8;
+  }
+
+  .col-span-4 {
+    grid-column: span 4 / span 4;
+  }
+}
+
+/* Empty state */
+.empty-state {
+  padding: 2.5rem 1.5rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+}
+
+.empty-icon {
+  width: 3rem;
+  height: 3rem;
+  border-radius: 9999px;
+  background-color: #f1f5f9;
+  color: #64748b;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.25rem;
+}
+
+.dark .empty-icon {
+  background-color: var(--dark-bg-panel, #090909);
+  color: var(--dark-text-secondary, #BCBCBC);
+}
+
+.empty-title {
+  margin: 0.75rem 0 0.25rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #0f172a;
+}
+
+.dark .empty-title {
+  color: var(--dark-text-primary);
+}
+
+.empty-desc {
+  margin: 0;
+  font-size: 0.75rem;
+  color: #64748b;
+}
+
+.dark .empty-desc {
+  color: var(--dark-text-secondary);
+}
+
+/* Ensure the empty-state CTA uses the green chip in dark mode */
+.dark .empty-state .pill-button {
+  background-color: var(--dark-green-bg, #1C2B1C);
+  color: var(--dark-green-main, #04C40A);
+  border-color: var(--dark-green-main, #04C40A);
+}
+
+/* Summary metrics */
+.summary-grid {
+  width: 100%;
+}
+
+.metric-card {
+  border-radius: 0.75rem;
+  overflow: hidden;
+  background: transparent;
+}
+
+.metric-card .panel-padded {
+  background-color: #fff;
+  border: 1px solid #e6eef3;
+  border-radius: 0.75rem;
+  box-shadow: 0 4px 12px rgba(2, 6, 23, 0.04);
+  height: 100%;
+}
+
+.metric-card .metric-value {
+  font-size: 1.5rem;
+  font-weight: 800;
+}
+
+.mini-bar {
+  width: 48px;
+  border-radius: 6px;
+  background: linear-gradient(180deg, #E8F5E9, #C8E6C9);
+  box-shadow: 0 4px 12px rgba(2, 6, 23, 0.06);
+  display: block;
+}
+
+.mini-bar.quizzes {
+  background: linear-gradient(180deg, #E3F2FD, #BBDEFB);
+}
+
+.mini-bar.exams {
+  background: linear-gradient(180deg, #FFF3E0, #FFE0B2);
+}
+
+.mini-bar.activities {
+  background: linear-gradient(180deg, #E8F5E9, #C8E6C9);
+}
+
+.dark .mini-bar {
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.45);
+  background: linear-gradient(180deg, var(--dark-green-bg), var(--dark-green-main));
+}
+
+.dark .mini-bar.quizzes {
+  background: linear-gradient(180deg, #1C2B1C, #04C40A);
+}
+
+.dark .mini-bar.exams {
+  background: linear-gradient(180deg, #1C2B1C, #04C40A);
+}
+
+.dark .mini-bar.activities {
+  background: linear-gradient(180deg, var(--dark-green-bg), var(--dark-green-main));
+}
+
+@media (max-width: 1024px) {
+  .summary-grid {
+    grid-template-columns: repeat(2, 1fr) !important;
+  }
+}
+
+@media (max-width: 640px) {
+  .summary-grid {
+    grid-template-columns: 1fr !important;
+  }
+}
+
+.charts-insights-spacing {
+  /* Increase vertical gap between Charts & Insights and the To-do list */
+  margin-bottom: 2.25rem;
+  /* larger gap (36px) */
+}
+
+@media (min-width: 768px) {
+  .charts-insights-spacing {
+    margin-bottom: 3rem;
+    /* on wider screens give more breathing room */
+  }
+}
+
+.dark .empty-state .pill-button:hover {
+  background-color: var(--dark-green-main, #04C40A);
+  color: #ffffff;
+}
+
+/* Chart component styles for consistent dark mode */
+.sparkbar-container {
+  background: transparent;
+}
+
+.sparkbar-item {
+  background: var(--chart-bg);
+  color: var(--chart-text);
+}
+
+.sparkbar-bar {
+  background: var(--chart-bar-bg);
+}
+
+.sparkbar-bar.today {
+  background: var(--chart-bar-today);
+}
+
+.donut-chart-bg {
+  fill: var(--chart-donut-bg);
+}
+
+.donut-chart-text {
+  fill: var(--chart-donut-text);
+}
+
+.donut-legend-text {
+  color: var(--chart-legend-text);
+}
+
+.simple-bar-bg {
+  background: var(--chart-simple-bg);
+}
+
+.simple-bar-container {
+  background: var(--chart-simple-bar-bg);
+}
+
+.simple-bar-fill {
+  background: var(--chart-simple-bar-fill);
+}
+
+.simple-bar-text {
+  color: var(--chart-simple-text);
+}
+
+.simple-bar-count {
+  color: var(--chart-simple-text);
+}
+
+/* Dark mode overrides for donut chart colors */
+.dark .donut-chart-bg {
+  fill: var(--dark-bg-panel);
+}
+
+.dark .donut-chart-text {
+  fill: var(--dark-text-primary);
+}
+
+/* Ensure chart panels have proper dark backgrounds */
+.dark .panel h3 {
+  color: var(--dark-text-primary);
+}
+
+/* Metric cards dark mode */
+.dark .metric-card .panel-padded {
+  background-color: var(--dark-bg-panel);
+  border-color: var(--dark-border);
+}
+
+.dark .metric-card {
+  color: var(--dark-text-primary);
+}
+
+/* Charts section title */
+.dark .charts-insights-spacing h2 {
+  color: var(--dark-text-primary);
+}
+
+/* Panel backgrounds in dark mode */
+.dark .panel {
+  background-color: var(--dark-bg-panel);
+  border-color: var(--dark-border);
+}
+
+/* Summary grid text colors */
+.dark .summary-grid .metric-card {
+  color: var(--dark-text-primary);
+}
+
+.dark .summary-grid .metric-card div {
+  color: var(--dark-text-primary);
+}
+
+/* Add
+itional dark mode text and element fixes */
+.dark h1,
+.dark h2,
+.dark h3,
+.dark h4,
+.dark h5,
+.dark h6 {
+  color: var(--dark-text-primary);
+}
+
+.dark p {
+  color: var(--dark-text-secondary);
+}
+
+/* Ensure all dashboard text uses proper dark colors */
+.dark .dashboard-root * {
+  border-color: var(--dark-border);
+}
+
+/* Fix any remaining hardcoded colors in inline styles */
+.dark [style*="color: #333"],
+.dark [style*="color: #666"],
+.dark [style*="color: #111"] {
+  color: var(--dark-text-primary) !important;
+}
+
+.dark [style*="background: #f1f5f9"],
+.dark [style*="background: #eef2ff"] {
+  background: var(--dark-bg-panel) !important;
+}
+
+/* Ensure chart containers have proper backgrounds */
+.dark .panel[style*="padding"] {
+  background-color: var(--dark-bg-panel);
+  border-color: var(--dark-border);
+}
+
+/* Enhanc
+ed green theme for light mode charts */
+.sparkbar-bar {
+  transition: all 0.3s ease;
+}
+
+.sparkbar-bar:hover {
+  transform: scaleY(1.05);
+  filter: brightness(1.1);
+}
+
+.simple-bar-fill {
+  transition: all 0.3s ease;
+}
+
+/* Make sure the simple bar chart has proper green accent */
+.simple-bar-bg {
+  box-shadow: 0 2px 4px rgba(46, 125, 50, 0.1);
+}
+
+/* Light mode donut chart enhancements */
+.donut-legend-text {
+  font-weight: 500;
+}
+
+/* Ensure sparkbar items have subtle green background in light mode */
+.sparkbar-item {
+  border: 1px solid rgba(46, 125, 50, 0.1);
+  box-shadow: 0 1px 3px rgba(46, 125, 50, 0.05);
+}
+
+/* Dark mode overrides to maintain existing dark theme */
+.dark .sparkbar-item {
+  border: 1px solid var(--dark-border);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+}
+
+.dark .simple-bar-bg {
+  box-shadow: 0 2px 4px rgba(4, 196, 10, 0.1);
+}

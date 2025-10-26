@@ -1,0 +1,229 @@
+@import "tailwindcss";
+@custom-variant dark (&:where(.dark, .dark *));
+
+:root {
+  /* Dark mode color palette */
+  --dark-bg-main: #090909;
+  --dark-bg-sidebar: #101011;
+  --dark-bg-panel: #090909;
+  --dark-text-primary: #FFFFFF;
+  --dark-text-secondary: #BCBCBC;
+  --dark-green-main: #04C40A;
+  --dark-green-bg: #1C2B1C;
+  --dark-border: #2E2E2E;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  height: 100%;
+  font-family: "Inter", sans-serif;
+  transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+button,
+a {
+  @apply cursor-pointer;
+}
+
+:focus-visible {
+  outline: 1px solid var(--focus-color, #1C2B1C);
+}
+
+/* Dark mode focus states */
+.dark :focus-visible {
+  outline-color: var(--dark-green-main, #04C40A);
+}
+
+/* Global dark mode overrides for main background */
+.dark .min-h-screen {
+  background-color: var(--dark-bg-main);
+}
+
+/* Global dark mode overrides for sidebar */
+.dark aside {
+  background-color: var(--dark-bg-sidebar);
+}
+
+/* Global dark mode border color override */
+.dark [class*="border-slate"],
+.dark [class*="border-"] {
+  border-color: var(--dark-border);
+}
+
+.dark [class*="divide-slate"] > * + * {
+  border-color: var(--dark-border);
+}
+
+/* Override specific border colors */
+.dark [class*="border-"][class*="334155"],
+.dark [class*="border-"][class*="374151"],
+.dark [class*="border-"][class*="slate-700"],
+.dark [class*="border-"][class*="slate-800"] {
+  border-color: var(--dark-border);
+}
+
+/* Global dark mode overrides for sidebar text colors */
+.dark aside [class*="text-slate-400"] {
+  color: var(--dark-text-secondary);
+}
+
+.dark aside [class*="text-slate-500"] {
+  color: var(--dark-text-secondary);
+}
+
+.dark aside [class*="text-slate-200"] {
+  color: var(--dark-text-primary);
+}
+
+/* Green color replacements for active states in dark mode */
+.dark [class*="from-"][class*="1C2B1C"] {
+  background: var(--dark-green-bg);
+}
+
+.dark [class*="text-"][class*="1C2B1C"] {
+  color: var(--dark-green-main);
+}
+
+.dark a[class*="1C2B1C"],
+.dark button[class*="1C2B1C"],
+.dark svg[class*="1C2B1C"] {
+  color: var(--dark-green-main);
+}
+
+/* Hover states for navigation items in dark mode */
+.dark aside a:hover,
+.dark aside button:hover {
+  background-color: var(--dark-green-bg);
+}
+
+.dark aside a:hover *,
+.dark aside button:hover * {
+  color: var(--dark-green-main);
+}
+
+/* Active/selected navigation items */
+.dark aside a[class*="bg-gradient-to-br"],
+.dark aside button[class*="bg-gradient-to-br"] {
+  background: var(--dark-green-bg);
+}
+
+.dark aside a[class*="bg-gradient-to-br"] *,
+.dark aside button[class*="bg-gradient-to-br"] * {
+  color: var(--dark-green-main);
+}
+
+/* Dark mode dropdown background */
+.dark aside .bg-white {
+  background-color: var(--dark-bg-sidebar);
+}
+
+/* Mobile header background */
+.dark header[class*="bg-white"] {
+  background-color: rgba(16, 16, 17, 0.9);
+}
+
+/* Profile dropdown in sidebar */
+.dark aside [class*="bg-white"] {
+  background-color: var(--dark-bg-sidebar);
+}
+
+/* Green color replacements for navigation items (Practice Tests, Study Mode) */
+.dark [class*="from-green-500"] {
+  --tw-gradient-from: var(--dark-green-bg);
+}
+
+.dark [class*="to-green-600"] {
+  --tw-gradient-to: var(--dark-green-bg);
+}
+
+.dark .text-green-500 {
+  color: var(--dark-green-main);
+}
+
+.dark svg.text-green-500 {
+  color: var(--dark-green-main);
+}
+
+/* Comprehensive slate background color overrides for dark mode */
+/* Replace slate-800 with main dark background */
+.dark [class*="bg-slate-800"],
+.dark [class*="dark:bg-slate-800"] {
+  background-color: var(--dark-bg-panel);
+}
+
+/* Replace slate-900 with main dark background */
+.dark [class*="bg-slate-900"],
+.dark [class*="dark:bg-slate-900"] {
+  background-color: var(--dark-bg-main);
+}
+
+/* Replace slate-700 backgrounds */
+.dark [class*="bg-slate-700"] {
+  background-color: var(--dark-bg-panel);
+}
+
+/* Replace slate-50 backgrounds (lighter panels) */
+.dark [class*="bg-slate-50"] {
+  background-color: var(--dark-bg-panel);
+}
+
+/* Replace slate-100 backgrounds (lighter panels) */
+.dark [class*="bg-slate-100"] {
+  background-color: var(--dark-bg-panel);
+}
+
+/* Ensure slate border colors are overridden */
+.dark [class*="border-slate-700"],
+.dark [class*="border-slate-800"],
+.dark [class*="border-slate-900"],
+.dark [class*="border-slate-100"],
+.dark [class*="border-slate-200"] {
+  border-color: var(--dark-border);
+}
+
+/* Override divide colors */
+.dark [class*="divide-slate-700"] > * + *,
+.dark [class*="divide-slate-800"] > * + * {
+  border-color: var(--dark-border);
+}
+
+/* Override specific hex color backgrounds that might still be in use */
+.dark [class*="bg-"][class*="1f2937"],
+.dark [class*="bg-"][class*="1F2937"] {
+  background-color: var(--dark-bg-main);
+}
+
+/* Override slate text colors to use our design system colors */
+.dark [class*="text-slate-100"],
+.dark [class*="text-slate-200"] {
+  color: var(--dark-text-primary);
+}
+
+.dark [class*="text-slate-300"],
+.dark [class*="text-slate-400"] {
+  color: var(--dark-text-secondary);
+}
+
+/* Card and panel backgrounds in dark mode */
+.dark .bg-white:not(aside .bg-white):not(header .bg-white) {
+  background-color: var(--dark-bg-panel);
+}
+
+/* Ensure rounded cards and panels use correct dark background */
+.dark [class*="rounded-lg"].bg-white,
+.dark [class*="rounded-xl"].bg-white,
+.dark [class*="rounded-2xl"].bg-white,
+.dark [class*="rounded-md"].bg-white {
+  background-color: var(--dark-bg-panel);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation: none;
+    transition: none;
+    scroll-behavior: auto;
+  }
+}
