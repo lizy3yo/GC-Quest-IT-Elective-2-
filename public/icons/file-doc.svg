@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 48 48" fill="none">
+  <rect width="48" height="48" rx="8" fill="#0284C7"/>
+  <path d="M30 0v12a6 6 0 0 0 6 6h12" transform="translate(-6,8)" fill="rgba(255,255,255,0.12)"/>
+  <text x="24" y="30" text-anchor="middle" font-size="12" font-weight="700" fill="#fff" font-family="Arial, Helvetica, sans-serif">DOC</text>
+</svg>
