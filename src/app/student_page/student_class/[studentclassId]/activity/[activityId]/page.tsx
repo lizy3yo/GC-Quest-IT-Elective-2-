@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { studentApi, type StudentClassDetails } from '@/lib/api/student';
+import { studentApi, type StudentClassDetails } from '@/services';
 import { useAuth } from '@/hooks/useAuth';
 import Alert from "@/components/ui/alert_template/Alert";
 import LoadingTemplate2 from '@/components/ui/loading_template_2/loading2';

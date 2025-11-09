@@ -3,7 +3,7 @@
 import { useState, useMemo, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { classApi, IClass } from "@/lib/api/teacher";
+import { classApi, IClass } from "@/services";
 
 type ClassItem = {
   id: string;

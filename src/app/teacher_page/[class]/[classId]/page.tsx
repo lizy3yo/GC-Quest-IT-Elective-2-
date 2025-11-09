@@ -7,7 +7,7 @@ import { useRouter, usePathname, useParams } from "next/navigation";
 import Alert from '@/components/ui/alert_template/Alert';
 
 //CUSTOM MODULES
-import { assessmentApi, classApi, type IAssessment, type IClass } from '@/lib/api/teacher';
+import { assessmentApi, classApi, type IAssessment, type IClass } from '@/services';
 
 // Avatar component for posts
 function Avatar({ name }: { name: string | null | undefined }) {

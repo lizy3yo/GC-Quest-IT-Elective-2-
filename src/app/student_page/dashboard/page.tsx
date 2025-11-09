@@ -5,7 +5,7 @@ import { useLoading } from "@/hooks/useLoading";
 import useAuth from "@/hooks/useAuth";
 import Link from "next/link";
 import api from "@/lib/api";
-import { studentApi, type StudentClassDetails, type StudentAssessment, type StudentActivity } from "@/lib/api/student";
+import { studentApi, type StudentClassDetails, type StudentAssessment, type StudentActivity } from "@/services";
 import Image from "next/image";
 import LoadingTemplate2 from "@/components/ui/loading_template_2/loading2";
 // styles are now included via student.css imported in the layout

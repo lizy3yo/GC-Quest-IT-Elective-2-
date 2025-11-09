@@ -3,7 +3,7 @@
 import React, { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { assessmentApi, classApi } from "@/lib/api/teacher";
+import { assessmentApi, classApi } from "@/services";
 import { authManager } from "@/utils/auth";
 
 // --- StudentList inline implementation ---
