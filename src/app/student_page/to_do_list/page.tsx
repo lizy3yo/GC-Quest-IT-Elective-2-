@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from 'next/navigation';
 import { CheckCircle2, Clock, FileText, ListTodo, NotebookText } from "lucide-react";
-import { studentApi, StudentClassDetails, StudentAssessment, StudentActivity } from "@/lib/api/student";
+import { studentApi, StudentClassDetails, StudentAssessment, StudentActivity } from "@/services";
 
 type ItemStatus = "on-time" | "late" | "pending";
 

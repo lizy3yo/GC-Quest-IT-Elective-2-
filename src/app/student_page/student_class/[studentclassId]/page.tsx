@@ -3,8 +3,8 @@
 import React, { useEffect, useMemo, useState } from "react";
 import LoadingTemplate2 from '@/components/ui/loading_template_2/loading2';
 import { useRouter } from "next/navigation";
-import { studentApi, type StudentClassDetails, type CommentMeta, type StudentActivity, type StudentAssessment } from '@/lib/api/student';
-import { classApi as teacherClassApi } from '@/lib/api/teacher';
+import { studentApi, type StudentClassDetails, type CommentMeta, type StudentActivity, type StudentAssessment } from '@/services';
+import { classApi as teacherClassApi } from '@/services';
 import Alert from "@/components/ui/alert_template/Alert";
 import { useAuth } from "@/hooks/useAuth";
 
