@@ -1,34 +1,30 @@
-"use client";
-import { useState, useEffect } from 'react';
-import { studentApi, ClassListResponse } from '@/services';
+import { useQuery } from '@tanstack/react-query';
+import { studentApi } from '@/services';
+import { IClassInfo, StudentClassDetails } from '@/interfaces';
 
-export function useStudentClasses(params?: { active?: boolean; limit?: number; page?: number }) {
-  const [data, setData] = useState<ClassListResponse | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+const fetchStudentClasses = async (): Promise<IClassInfo[]> => {
+  const response = await studentApi.getClasses({ active: true, limit: 50 });
+  if (response.success && response.data?.classes) {
+    const classes = response.data.classes as StudentClassDetails[];
+    return classes.map((c) => ({
+      _id: c._id,
+      name: c.name,
+      teacher: c.instructor?.name || '',
+      subject: c.subject,
+      studentCount: c.studentCount,
+      classCode: c.classCode,
+      description: c.description,
+      createdAt: c.createdAt,
+      courseYear: c.courseYear,
+      // leave day/time/room undefined for now; source has `schedule: string` if needed later
+    }));
+  }
+  throw new Error(response.error || 'Failed to fetch classes');
+};
 
-  useEffect(() => {
-    let mounted = true;
-    setLoading(true);
-    studentApi.getClasses(params)
-      .then(res => {
-        if (!mounted) return;
-        if (res.success) setData(res.data ?? null);
-        else setError(res.error || 'Failed to load classes');
-      })
-      .catch(err => {
-        if (!mounted) return;
-        setError(err?.message || 'Network error');
-      })
-      .finally(() => {
-        if (!mounted) return;
-        setLoading(false);
-      });
-
-    return () => { mounted = false };
-  }, [JSON.stringify(params)]);
-
-  return { data, loading, error };
-}
-
-export default useStudentClasses;
+export const useStudentClasses = () => {
+  return useQuery<IClassInfo[], Error>({
+    queryKey: ['studentClasses'],
+    queryFn: fetchStudentClasses,
+  });
+};

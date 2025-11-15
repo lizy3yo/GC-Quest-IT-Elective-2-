@@ -1,133 +1,18 @@
-/*
- * Copyright 2025 Kharl Ryan M. De Jesus
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
-
 import api from '@/lib/api';
-
-// Student-specific interfaces
-export interface StudentInfo {
-  id: string;
-  name: string;
-  email: string;
-  avatar?: string;
-}
-
-export interface TeacherInfo {
-  name: string;
-  email: string;
-  department?: string;
-}
-
-export interface StudentAssessment {
-  id: string;
-  title: string;
-  type: "Quiz" | "Exam";
-  format?: "online" | "file_submission";
-  dueDate: string;
-  points?: number;
-  description?: string;
-  instructions?: string;
-  published: boolean;
-  accessCode?: string;
-  category: "Quiz" | "Exam" | "Activity";
-}
-
-export interface StudentActivity {
-  id: string;
-  title: string;
-  dueDate: string;
-  points: number;
-  submittedAt?: string;
-  status: "submitted" | "late" | "missing";
-  description?: string;
-}
-
-export interface AttachmentMeta {
-  id: string;
-  name: string;
-  size: number;
-  type: string;
-  url: string;
-}
-
-export interface CommentMeta {
-  id: string;
-  author: string | null | undefined;
-  timestamp: string | null | undefined;
-  text: string | null | undefined;
-}
-
-export interface FeedPost {
-  id: string;
-  author: string;
-  timestamp: string;
-  content: string;
-  link?: string;
-  attachments?: AttachmentMeta[];
-  comments?: CommentMeta[];
-}
-
-export interface ResourceItem {
-  id: string;
-  title: string;
-  type: string;
-  description?: string;
-  url: string;
-  mimeType?: string;
-  sizeKB?: number;
-}
-
-export interface StudentClassDetails {
-  _id: string;
-  name: string;
-  classCode: string;
-  schedule: string;
-  subject: string;
-  courseYear: string;
-  description?: string;
-  instructor: TeacherInfo;
-  students: StudentInfo[];
-  studentCount: number;
-  createdAt: string;
-  activities?: StudentActivity[];
-  feed?: FeedPost[];
-  resources?: ResourceItem[];
-  assessments?: StudentAssessment[];
-}
-
-// API response interfaces
-export interface ApiResponse<T> {
-  success: boolean;
-  data?: T;
-  error?: string;
-  details?: string;
-}
-
-export interface ClassListResponse {
-  classes: StudentClassDetails[];
-  pagination: {
-    current: number;
-    total: number;
-    count: number;
-    totalItems: number;
-  };
-}
-
-export interface ClassDetailResponse {
-  class: StudentClassDetails;
-}
+import {
+  StudentInfo,
+  TeacherInfo,
+  StudentAssessment,
+  StudentActivity,
+  AttachmentMeta,
+  CommentMeta,
+  FeedPost,
+  ResourceItem,
+  StudentClassDetails,
+  ApiResponse,
+  ClassListResponse,
+  ClassDetailResponse,
+} from '@/interfaces';
 
 // Student API client
 export const studentApi = {
@@ -217,6 +102,60 @@ export const studentApi = {
     }
   },
 
+  async updatePost(classId: string, postId: string, content: string): Promise<ApiResponse<{ post: FeedPost }>> {
+    try {
+      const response = await api.put(`/student_page/class/${classId}/posts/${postId}`, {
+        content
+      });
+      
+      return {
+        success: true,
+        data: response.data
+      };
+    } catch (error: any) {
+      return {
+        success: false,
+        error: error.message || 'Failed to update post',
+        details: error.body?.details
+      };
+    }
+  },
+
+  async deletePost(classId: string, postId: string): Promise<ApiResponse<void>> {
+    try {
+      await api.delete(`/student_page/class/${classId}/posts/${postId}`);
+      
+      return {
+        success: true,
+      };
+    } catch (error: any) {
+      return {
+        success: false,
+        error: error.message || 'Failed to delete post',
+        details: error.body?.details
+      };
+    }
+  },
+
+  async createComment(classId: string, postId: string, text: string): Promise<ApiResponse<{ comment: CommentMeta }>> {
+    try {
+      const response = await api.post(`/student_page/class/${classId}/posts/${postId}/comments`, {
+        text
+      });
+      
+      return {
+        success: true,
+        data: response.data
+      };
+    } catch (error: any) {
+      return {
+        success: false,
+        error: error.message || 'Failed to create comment',
+        details: error.body?.details
+      };
+    }
+  },
+
   // Submit an activity
   async submitActivity(classId: string, activityId: string, files: any[], comment?: string): Promise<ApiResponse<{ submission: any }>> {
     try {
@@ -251,6 +190,29 @@ export const studentApi = {
       return {
         success: false,
         error: error.message || 'Failed to get submission',
+        details: error.body?.details
+      };
+    }
+  },
+
+  // Get flashcards for a user
+  async getFlashcards(params: { userId: string }): Promise<ApiResponse<{ flashcards: any[] }>> {
+    try {
+      // Mock data for now
+      const mockFlashcards = [
+        { _id: '1', title: 'React Basics', cards: [{}, {}, {}], updatedAt: new Date().toISOString(), createdAt: new Date().toISOString() },
+        { _id: '2', title: 'JavaScript Fundamentals', cards: [{}, {}, {}, {}], updatedAt: new Date().toISOString(), createdAt: new Date().toISOString() },
+      ];
+      return {
+        success: true,
+        data: {
+          flashcards: mockFlashcards
+        }
+      };
+    } catch (error: any) {
+      return {
+        success: false,
+        error: error.message || 'Failed to get flashcards',
         details: error.body?.details
       };
     }

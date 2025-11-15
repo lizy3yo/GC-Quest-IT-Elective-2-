@@ -3,7 +3,7 @@
 import React, { useEffect, useState, useCallback } from "react";
 import { useRouter, useParams } from "next/navigation";
 import { ChevronLeft, ChevronRight, Settings } from "lucide-react";
-import LoadingTemplate2 from "@/components/ui/loading_template_2/loading2"; // added import
+import LoadingTemplate2 from "@/components/atoms/loading_template_2/loading2"; // added import
 import { useAuth } from "@/hooks/useAuth";
 import { authManager } from "@/utils/auth";
 

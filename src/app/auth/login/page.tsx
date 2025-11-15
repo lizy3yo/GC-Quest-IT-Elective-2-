@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import Alert from "@/components/ui/alert_template/Alert";
+import Alert from "@/components/molecules/alert_template/Alert";
 import { useAlert } from "@/hooks/useAlert";
 import "./login-mobile.css";
 import { signIn, useSession } from "next-auth/react";
@@ -13,8 +13,8 @@ interface LoginData {
   role: "student" | "instructor";
 }
 
-interface Student {
-  _id: string; // Add this line
+interface User {
+  _id: string;
   username: string;
   email: string;
   role: string;
@@ -23,7 +23,7 @@ interface Student {
 }
 
 interface LoginResponse {
-  Student: Student;
+  user: User;
   accessToken: string;
 }
 
@@ -156,9 +156,14 @@ export default function Login() {
       const loginData = data as LoginResponse;
 
       // Store user data
-      localStorage.setItem("user", JSON.stringify(loginData.Student));
-      localStorage.setItem("userId", loginData.Student._id); // Add this line
-      localStorage.setItem("accessToken", loginData.accessToken);
+      if (loginData.user) {
+        localStorage.setItem("user", JSON.stringify(loginData.user));
+        localStorage.setItem("userId", loginData.user._id); // Add this line
+        localStorage.setItem("accessToken", loginData.accessToken);
+      } else {
+        showError("Login failed: user data not found in response.", "Login Failed");
+        return;
+      }
       // Persist instructor credentials if user opted in
       try {
         if (formData.role === "instructor") {
@@ -179,7 +184,7 @@ export default function Login() {
 
       // Navigate based on user role
       setTimeout(() => {
-        switch (loginData.Student.role) {
+        switch (loginData.user.role) {
           case "admin":
             router.push("/admin");
             break;

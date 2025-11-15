@@ -2,6 +2,7 @@ import { SessionProvider } from 'next-auth/react';
 import { Inter } from 'next/font/google';
 import './globals.css'
 import ThemeProvider from "@/utils/ThemeProvider";
+import QueryProvider from '@/utils/QueryProvider';
 
 const inter = Inter({ 
   subsets: ['latin'],
@@ -24,7 +25,9 @@ export default function RootLayout({
     <html lang="en">
       <body className={inter.className}>
         <SessionProvider refetchOnWindowFocus={false}>
-          <ThemeProvider>{children}</ThemeProvider>
+          <QueryProvider>
+            <ThemeProvider>{children}</ThemeProvider>
+          </QueryProvider>
         </SessionProvider>
       </body>
     </html>

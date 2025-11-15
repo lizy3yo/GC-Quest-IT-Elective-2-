@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import PrimaryActionButton from "@/components/ui/buttons/PrimaryActionButton";
+import PrimaryActionButton from "@/components/atoms/buttons/PrimaryActionButton";
 
 export default function FlashcardsCreateSetPage() {
   const router = useRouter();

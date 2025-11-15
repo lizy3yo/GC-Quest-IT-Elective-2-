@@ -2,7 +2,7 @@
 
 import React, { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import PrimaryActionButton from '@/components/ui/buttons/PrimaryActionButton';
+import PrimaryActionButton from '@/components/atoms/buttons/PrimaryActionButton';
 
 type FlashcardItem = {
   _id: string;

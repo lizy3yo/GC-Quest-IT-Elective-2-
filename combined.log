@@ -1,0 +1,36 @@
+{"timestamp":"2025-11-15T01:32:38.730Z","level":"info","message":"GET /flashcard: Found 4 flashcards for user 68d44a77335ae9c3a921bc5e","service":"gc-quest-api"}
+{"timestamp":"2025-11-15T01:32:38.732Z","level":"info","message":"  Flashcard 1: \"ewqewq\" - Subject: \"IT Elective 2 - Web/Mobile Frontend Development (LAB)\"","service":"gc-quest-api"}
+{"timestamp":"2025-11-15T01:32:38.732Z","level":"info","message":"  Flashcard 2: \"Review(Agile).pdf - Integrative Programming and Technologies (LAB)\" - Subject: \"Integrative Programming and Technologies (LAB)\"","service":"gc-quest-api"}
+{"timestamp":"2025-11-15T01:32:38.733Z","level":"info","message":"  Flashcard 3: \"ewqeqwe\" - Subject: \"Integrative Programming and Technologies (LAB)\"","service":"gc-quest-api"}
+{"timestamp":"2025-11-15T01:32:38.734Z","level":"info","message":"  Flashcard 4: \"Group 6 - Data Cleaning & Application Team_DE_JESUS_K\" - Subject: \"IT Elective 2 - Web/Mobile Frontend Development (LEC)\"","service":"gc-quest-api"}
+{"timestamp":"2025-11-15T01:34:04.068Z","level":"info","message":"GET /flashcard: Found 4 flashcards for user 68d44a77335ae9c3a921bc5e","service":"gc-quest-api"}
+{"timestamp":"2025-11-15T01:34:04.068Z","level":"info","message":"  Flashcard 1: \"ewqewq\" - Subject: \"IT Elective 2 - Web/Mobile Frontend Development (LAB)\"","service":"gc-quest-api"}
+{"timestamp":"2025-11-15T01:34:04.068Z","level":"info","message":"  Flashcard 2: \"Review(Agile).pdf - Integrative Programming and Technologies (LAB)\" - Subject: \"Integrative Programming and Technologies (LAB)\"","service":"gc-quest-api"}
+{"timestamp":"2025-11-15T01:34:04.069Z","level":"info","message":"  Flashcard 3: \"ewqeqwe\" - Subject: \"Integrative Programming and Technologies (LAB)\"","service":"gc-quest-api"}
+{"timestamp":"2025-11-15T01:34:04.069Z","level":"info","message":"  Flashcard 4: \"Group 6 - Data Cleaning & Application Team_DE_JESUS_K\" - Subject: \"IT Elective 2 - Web/Mobile Frontend Development (LEC)\"","service":"gc-quest-api"}
+{"timestamp":"2025-11-15T01:34:56.715Z","level":"info","message":"GET /flashcard: Found 4 flashcards for user 68d44a77335ae9c3a921bc5e","service":"gc-quest-api"}
+{"timestamp":"2025-11-15T01:34:56.715Z","level":"info","message":"  Flashcard 1: \"ewqewq\" - Subject: \"IT Elective 2 - Web/Mobile Frontend Development (LAB)\"","service":"gc-quest-api"}
+{"timestamp":"2025-11-15T01:34:56.716Z","level":"info","message":"  Flashcard 2: \"Review(Agile).pdf - Integrative Programming and Technologies (LAB)\" - Subject: \"Integrative Programming and Technologies (LAB)\"","service":"gc-quest-api"}
+{"timestamp":"2025-11-15T01:34:56.716Z","level":"info","message":"  Flashcard 3: \"ewqeqwe\" - Subject: \"Integrative Programming and Technologies (LAB)\"","service":"gc-quest-api"}
+{"timestamp":"2025-11-15T01:34:56.716Z","level":"info","message":"  Flashcard 4: \"Group 6 - Data Cleaning & Application Team_DE_JESUS_K\" - Subject: \"IT Elective 2 - Web/Mobile Frontend Development (LEC)\"","service":"gc-quest-api"}
+{"timestamp":"2025-11-15T01:37:34.375Z","level":"info","message":"GET /flashcard: Found 4 flashcards for user 68d44a77335ae9c3a921bc5e","service":"gc-quest-api"}
+{"timestamp":"2025-11-15T01:37:34.376Z","level":"info","message":"  Flashcard 1: \"ewqewq\" - Subject: \"IT Elective 2 - Web/Mobile Frontend Development (LAB)\"","service":"gc-quest-api"}
+{"timestamp":"2025-11-15T01:37:34.376Z","level":"info","message":"  Flashcard 2: \"Review(Agile).pdf - Integrative Programming and Technologies (LAB)\" - Subject: \"Integrative Programming and Technologies (LAB)\"","service":"gc-quest-api"}
+{"timestamp":"2025-11-15T01:37:34.377Z","level":"info","message":"  Flashcard 3: \"ewqeqwe\" - Subject: \"Integrative Programming and Technologies (LAB)\"","service":"gc-quest-api"}
+{"timestamp":"2025-11-15T01:37:34.377Z","level":"info","message":"  Flashcard 4: \"Group 6 - Data Cleaning & Application Team_DE_JESUS_K\" - Subject: \"IT Elective 2 - Web/Mobile Frontend Development (LEC)\"","service":"gc-quest-api"}
+{"timestamp":"2025-11-15T01:37:35.962Z","level":"info","message":"GET /flashcard: Found 4 flashcards for user 68d44a77335ae9c3a921bc5e","service":"gc-quest-api"}
+{"timestamp":"2025-11-15T01:37:35.963Z","level":"info","message":"  Flashcard 1: \"ewqewq\" - Subject: \"IT Elective 2 - Web/Mobile Frontend Development (LAB)\"","service":"gc-quest-api"}
+{"timestamp":"2025-11-15T01:37:35.963Z","level":"info","message":"  Flashcard 2: \"Review(Agile).pdf - Integrative Programming and Technologies (LAB)\" - Subject: \"Integrative Programming and Technologies (LAB)\"","service":"gc-quest-api"}
+{"timestamp":"2025-11-15T01:37:35.964Z","level":"info","message":"  Flashcard 3: \"ewqeqwe\" - Subject: \"Integrative Programming and Technologies (LAB)\"","service":"gc-quest-api"}
+{"timestamp":"2025-11-15T01:37:35.964Z","level":"info","message":"  Flashcard 4: \"Group 6 - Data Cleaning & Application Team_DE_JESUS_K\" - Subject: \"IT Elective 2 - Web/Mobile Frontend Development (LEC)\"","service":"gc-quest-api"}
+{"timestamp":"2025-11-15T02:07:24.220Z","level":"info","message":"GET /flashcard: Found 4 flashcards for user 68d44a77335ae9c3a921bc5e","service":"gc-quest-api"}
+{"timestamp":"2025-11-15T02:07:24.221Z","level":"info","message":"  Flashcard 1: \"ewqewq\" - Subject: \"IT Elective 2 - Web/Mobile Frontend Development (LAB)\"","service":"gc-quest-api"}
+{"timestamp":"2025-11-15T02:07:24.221Z","level":"info","message":"  Flashcard 2: \"Review(Agile).pdf - Integrative Programming and Technologies (LAB)\" - Subject: \"Integrative Programming and Technologies (LAB)\"","service":"gc-quest-api"}
+{"timestamp":"2025-11-15T02:07:24.222Z","level":"info","message":"  Flashcard 3: \"ewqeqwe\" - Subject: \"Integrative Programming and Technologies (LAB)\"","service":"gc-quest-api"}
+{"timestamp":"2025-11-15T02:07:24.222Z","level":"info","message":"  Flashcard 4: \"Group 6 - Data Cleaning & Application Team_DE_JESUS_K\" - Subject: \"IT Elective 2 - Web/Mobile Frontend Development (LEC)\"","service":"gc-quest-api"}
+{"timestamp":"2025-11-15T02:07:33.173Z","level":"info","message":"GET /flashcard: Found 4 flashcards for user 68d44a77335ae9c3a921bc5e","service":"gc-quest-api"}
+{"timestamp":"2025-11-15T02:07:33.173Z","level":"info","message":"  Flashcard 1: \"ewqewq\" - Subject: \"IT Elective 2 - Web/Mobile Frontend Development (LAB)\"","service":"gc-quest-api"}
+{"timestamp":"2025-11-15T02:07:33.174Z","level":"info","message":"  Flashcard 2: \"Review(Agile).pdf - Integrative Programming and Technologies (LAB)\" - Subject: \"Integrative Programming and Technologies (LAB)\"","service":"gc-quest-api"}
+{"timestamp":"2025-11-15T02:07:33.174Z","level":"info","message":"  Flashcard 3: \"ewqeqwe\" - Subject: \"Integrative Programming and Technologies (LAB)\"","service":"gc-quest-api"}
+{"timestamp":"2025-11-15T02:07:33.175Z","level":"info","message":"  Flashcard 4: \"Group 6 - Data Cleaning & Application Team_DE_JESUS_K\" - Subject: \"IT Elective 2 - Web/Mobile Frontend Development (LEC)\"","service":"gc-quest-api"}
+{"timestamp":"2025-11-15T02:56:54.975Z","level":"info","message":"User logged out successfully","service":"gc-quest-api","meta":{"userId":"68d44a77335ae9c3a921bc5e"}}

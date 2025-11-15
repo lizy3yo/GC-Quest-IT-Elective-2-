@@ -3,7 +3,7 @@
 import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import api from '@/lib/api';
-import LoadingTemplate2 from '@/components/ui/loading_template_2/loading2';
+import LoadingTemplate2 from '@/components/atoms/loading_template_2/loading2';
 
 type FlashcardCard = {
   _id: string;

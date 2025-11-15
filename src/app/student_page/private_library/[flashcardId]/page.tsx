@@ -22,9 +22,9 @@ import {
   Trash2,
 } from "lucide-react";
 import Image from "next/image";
-import LoadingTemplate2 from "@/components/ui/loading_template_2/loading2"; // added import
-import PrimaryActionButton from "@/components/ui/buttons/PrimaryActionButton";
-import { Chip } from "@/components/ui/chip";
+import LoadingTemplate2 from "@/components/atoms/loading_template_2/loading2"; // added import
+import PrimaryActionButton from "@/components/atoms/buttons/PrimaryActionButton";
+import { Chip } from "@/components/atoms/Chip";
 
 type FlashcardCard = {
   _id: string;

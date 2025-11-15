@@ -1,3 +1,4 @@
+export * from '@/interfaces';
 export * from '@/lib/api/teacher';
 
 import * as teacherApi from '@/lib/api/teacher';
