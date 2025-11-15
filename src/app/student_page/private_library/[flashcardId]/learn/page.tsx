@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from "react";
 import { useRouter, useParams } from "next/navigation";
 
-import LoadingTemplate2 from "@/components/ui/loading_template_2/loading2"; // added import
+import LoadingTemplate2 from "@/components/atoms/loading_template_2/loading2"; // added import
 import { Settings } from "lucide-react";
 
 type FlashcardCard = {

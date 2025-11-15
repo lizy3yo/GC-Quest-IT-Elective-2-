@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useCallback } from 'react';
-import { AlertType } from '@/components/ui/alert_template/Alert';
+import { AlertType } from '@/components/molecules/alert_template/Alert';
 
 interface AlertState {
     isVisible: boolean;

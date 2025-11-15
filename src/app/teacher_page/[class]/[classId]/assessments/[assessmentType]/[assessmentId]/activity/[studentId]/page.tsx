@@ -3,8 +3,8 @@
 import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import { useAuth } from '@/hooks/useAuth';
-import Alert from '@/components/ui/alert_template/Alert';
-import LoadingTemplate2 from '@/components/ui/loading_template_2/loading2';
+import Alert from '@/components/molecules/alert_template/Alert';
+import LoadingTemplate2 from '@/components/atoms/loading_template_2/loading2';
 
 type Props = {
   params: Promise<{

@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter, usePathname, useParams } from "next/navigation";
 
-import Alert from '@/components/ui/alert_template/Alert';
+import Alert from '@/components/molecules/alert_template/Alert';
 
 //CUSTOM MODULES
 import { assessmentApi, classApi, type IAssessment, type IClass } from '@/services';
