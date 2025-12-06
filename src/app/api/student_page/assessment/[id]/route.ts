@@ -264,8 +264,8 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       classId: assessment.classId,
       submittedAt: now,
       status: isLate ? 'late' : 'submitted',
-      score: Math.round((totalScore / maxScore) * 100), // Convert to percentage
-      maxScore: 100,
+      score: Math.round(totalScore * 100) / 100, // Use actual score, not percentage
+      maxScore: maxScore, // Use actual max score from questions
       responses: gradedResponses,
       timeSpent: timeSpent || 0,
       attemptNumber: existingAttempts + 1,

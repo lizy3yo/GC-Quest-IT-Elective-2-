@@ -203,6 +203,8 @@ npm run dev            # Starts on http://localhost:3000
 - MongoDB database integration
 - Responsive design with gradient theming
 - Smooth scroll navigation
+- **Collaborative Study Rooms** - Real-time group discussions, shared notes, and peer challenges
+- **Resource Library Integration** - Curated open educational materials and downloadable study guides
 
 🚧 **In Development**
 - Flashcard deck creation and management
@@ -211,6 +213,59 @@ npm run dev            # Starts on http://localhost:3000
 - Study session tracking
 - Progress analytics
 - Public deck browsing
+
+## 🆕 New Features (Latest Update)
+
+### Collaborative Study Rooms
+Create or join study rooms for real-time collaboration:
+- **Real-time Chat**: Instant messaging with WebSocket support
+- **Shared Notes**: Collaborative note-taking
+- **Peer Challenges**: Create and answer multiple-choice quizzes
+- **Room Management**: Public/private rooms with member limits
+
+See [NEW_FEATURES.md](NEW_FEATURES.md) for detailed documentation.
+
+### Resource Library Integration
+Access curated educational materials:
+- **Multiple Formats**: PDFs, videos, audio lectures, documents, and links
+- **Smart Search**: Full-text search with filtering by type, subject, and category
+- **Bookmarking**: Save favorite resources for quick access
+- **Usage Tracking**: View popular resources based on downloads and views
+
+See [QUICK_START.md](QUICK_START.md) for a user guide.
+
+## 🔔 Toast Notification System
+
+A modern, accessible toast notification system has been implemented across all student pages:
+
+- **Non-intrusive Notifications**: Toasts appear at top-right, don't block user interaction
+- **4 Toast Types**: Success (green), Error (red), Warning (yellow), Info (blue)
+- **Auto-dismiss**: Configurable duration (default 5 seconds)
+- **Dark Mode Support**: Seamlessly adapts to light/dark themes
+- **Accessibility**: ARIA labels, keyboard navigation, screen reader support
+
+### Quick Usage
+```tsx
+import { useToast } from "@/contexts/ToastContext";
+
+const { showSuccess, showError } = useToast();
+
+// Show success notification
+showSuccess("Note saved successfully!");
+
+// Show error notification
+showError("Failed to save. Please try again.");
+```
+
+See [TOAST_QUICK_REFERENCE.md](TOAST_QUICK_REFERENCE.md) for complete documentation.
+
+## 📚 Additional Documentation
+
+- [NEW_FEATURES.md](NEW_FEATURES.md) - Comprehensive feature documentation
+- [QUICK_START.md](QUICK_START.md) - User guide for new features
+- [IMPLEMENTATION_SUMMARY.md](IMPLEMENTATION_SUMMARY.md) - Technical implementation details
+- [TOAST_QUICK_REFERENCE.md](TOAST_QUICK_REFERENCE.md) - Toast notification quick reference
+- [TOAST_NOTIFICATIONS_COMPLETE.md](TOAST_NOTIFICATIONS_COMPLETE.md) - Complete toast system overview
 
 ## 📄 License
 

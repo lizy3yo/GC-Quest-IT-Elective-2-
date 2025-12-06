@@ -15,7 +15,6 @@
  */
 
 import { authManager } from '@/utils/auth';
-import cache, { getCacheStats, clearCache } from './cache';
 
 /**
  * Improved ApiClient.request:
@@ -49,12 +48,7 @@ export class ApiClient {
 
   // Main request wrapper
   public async request(path: string, options: RequestInit = {}) {
-    // If path is a full URL use it. If path already targets an /api/ route, don't prefix the default base
-    const url = path.startsWith("http")
-      ? path
-      : path.startsWith('/api/')
-        ? path
-        : `${this.base}${path.startsWith("/") ? path : "/" + path}`;
+    const url = path.startsWith("http") ? path : `${this.base}${path.startsWith("/") ? path : "/" + path}`;
 
     // ensure headers object
     const headers = new Headers(options.headers || {});
@@ -68,7 +62,7 @@ export class ApiClient {
       else headers.delete("Authorization");
     };
 
-  // attach any existing access token in localStorage
+    // attach any existing access token in localStorage
     const stored = typeof window !== "undefined" ? localStorage.getItem("accessToken") : null;
     attachToken(stored);
 
@@ -77,37 +71,6 @@ export class ApiClient {
       headers,
       credentials: "include", // ensure cookies (refresh token) are sent
     };
-
-    // Simple GET caching (client-side):
-    // - Default: cache same-origin API calls (paths containing '/api/') for 60s
-    // - Override TTL with header 'x-cache-ttl' (seconds)
-    // - Disable caching by setting header 'x-cache' to 'no'
-    const method = (reqOpts.method || 'GET').toString().toUpperCase();
-    let cacheTtl = 0;
-    if (method === 'GET') {
-      const headerTtl = headers.get('x-cache-ttl');
-      const headerCache = headers.get('x-cache');
-      if (headerCache && headerCache.toLowerCase() === 'no') {
-        cacheTtl = 0;
-      } else if (headerTtl && !isNaN(Number(headerTtl))) {
-        cacheTtl = Math.max(0, Number(headerTtl));
-      } else if (url.includes('/api/')) {
-        cacheTtl = 60; // default TTL for API calls (seconds)
-      }
-
-      if (cacheTtl > 0) {
-        const cached = cache.get(url);
-        if (cached !== null) {
-          // cache hit — return cached body immediately
-          console.debug(`[api] cache hit: ${url}`);
-          return cached;
-        }
-        console.debug(`[api] cache miss: ${url}`);
-        // remove cache control headers before sending to server
-        headers.delete('x-cache-ttl');
-        headers.delete('x-cache');
-      }
-    }
 
     let res = await fetch(url, reqOpts);
 
@@ -140,18 +103,6 @@ export class ApiClient {
       err.status = res.status;
       err.body = body;
       throw err;
-    }
-
-    // store GET responses in cache when applicable
-    if (method === 'GET' && cacheTtl > 0) {
-      try {
-        cache.set(url, body, cacheTtl);
-        // optionally expose cache stats in dev via console
-        console.debug('[api] cache set:', { url, ttl: cacheTtl, stats: getCacheStats() });
-      } catch (e) {
-        // ignore cache set failures
-        console.warn('[api] cache set failed', e);
-      }
     }
 
     return body;

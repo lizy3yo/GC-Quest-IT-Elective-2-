@@ -23,23 +23,22 @@ export default function UploadFlashcardPage() {
   const [userId, setUserId] = useState<string>('');
 
   // File upload states
-  const [file, setFile] = useState<File | null>(null);
   const [deckTitle, setDeckTitle] = useState('');
-  const [deckDescription, setDeckDescription] = useState('');
   const [category, setCategory] = useState('');
+  const [subject, setSubject] = useState(''); // Subject from user's enrolled classes
+  const [userSubjects, setUserSubjects] = useState<string[]>([]); // User's class subjects
   const [isPublic, setIsPublic] = useState(false);
   const [loading, setLoading] = useState(false);
   const [preview, setPreview] = useState<Array<{ question: string; answer: string }>>([]);
 
   // AI analysis states
-  const [activeTab, setActiveTab] = useState<'upload' | 'ai' | 'zapier-file' | 'class-files'>('upload');
+  const [activeTab, setActiveTab] = useState<'ai' | 'zapier-file' | 'class-files'>('ai');
   const [text, setText] = useState('');
   const [analysisType, setAnalysisType] = useState('flashcards');
   const [aiLoading, setAiLoading] = useState(false);
   const [aiResult, setAiResult] = useState<AnalysisResult | null>(null);
 
   // New Zapier AI states
-  const [zapierText, setZapierText] = useState('');
   const [zapierFile, setZapierFile] = useState<File | null>(null);
   const [zapierLoading, setZapierLoading] = useState(false);
   const [zapierResult, setZapierResult] = useState<any>(null);
@@ -55,14 +54,8 @@ export default function UploadFlashcardPage() {
   const [zapierCardCount, setZapierCardCount] = useState(20);
   const [classFileCardCount, setClassFileCardCount] = useState(20);
 
-  // Add a new state for parsing loading
-  const [parsingLoading, setParsingLoading] = useState(false);
-
   // Editable cards built from parsed/AI results
   const [cards, setCards] = useState<Array<{ question: string; answer: string }>>([]);
-
-  // Upload tab analysis type
-  const [uploadAnalysisType, setUploadAnalysisType] = useState<'flashcards' | 'summary' | 'quiz'>('flashcards');
 
   const handleCardChange = (index: number, field: 'question' | 'answer', value: string) => {
     setCards(prev => {
@@ -80,7 +73,7 @@ export default function UploadFlashcardPage() {
     setCards(prev => [...prev, { question: '', answer: '' }]);
   };
 
-  // Get userId from localStorage or context
+  // Get userId and fetch user's enrolled classes
   useEffect(() => {
     // Try to get userId from localStorage, with fallback to user object
     let storedUserId = localStorage.getItem('userId');
@@ -103,121 +96,45 @@ export default function UploadFlashcardPage() {
     }
 
     setUserId(storedUserId || '');
+
+    // Fetch user's enrolled classes to get subjects
+    if (storedUserId) {
+      fetchUserSubjects();
+    }
   }, []);
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const selectedFile = e.target.files?.[0];
-    if (selectedFile) {
-      setFile(selectedFile);
-      if (!deckTitle) {
-        setDeckTitle(selectedFile.name.replace(/\.[^/.]+$/, ""));
-      }
-      parseFile(selectedFile);
-    }
-  };
-
-  // Update parseFile with userId check, loading, and improved error handling
-  const parseFile = async (file: File) => {
-    setParsingLoading(true);
+  const fetchUserSubjects = async () => {
     try {
-      let text = '';
-      const fileType = file.type;
-      const fileName = file.name.toLowerCase();
-
-      if (fileType === 'text/plain' || fileName.endsWith('.txt')) {
-        text = await file.text();
-      } else if (fileType === 'text/csv' || fileName.endsWith('.csv')) {
-        text = await file.text();
-        const lines = text.split('\n');
-        const parsed = lines.slice(1).map(line => {
-          const [question, answer] = line.split(',');
-          return { question: question?.trim(), answer: answer?.trim() };
-        }).filter(item => item.question && item.answer);
-        if (uploadAnalysisType === 'flashcards') {
-          setPreview(parsed.slice(0, 5));
-          setCards(parsed);
-        } else {
-          // For summary/quiz, send file to analyze API with selected type
-          if (!userId) { alert('Please log in to analyze files.'); return; }
-          const formData = new FormData();
-          formData.append('file', file);
-          formData.append('analysisType', uploadAnalysisType);
-          const response = await fetch(`/api/student_page/flashcard/analyze?userId=${userId}`, { method: 'POST', body: formData });
-          const data = await response.json();
-          if (response.ok) {
-            if (uploadAnalysisType === 'summary' && data.result?.summary) {
-              setCards([{ question: 'Summary', answer: data.result.summary }]);
-              setPreview([{ question: 'Summary', answer: data.result.summary.substring(0, 200) + (data.result.summary.length > 200 ? '...' : '') }]);
-            } else if (data.result?.cards?.length) {
-              setCards(data.result.cards);
-              setPreview(data.result.cards.slice(0, 5));
-            } else {
-              alert('No content generated from CSV.');
-            }
-          } else {
-            alert(data.message || 'Failed to analyze CSV');
-          }
+      // Get token for authentication
+      const token = localStorage.getItem('accessToken');
+      
+      const response = await fetch('/api/student_page/class?active=true', {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+        },
+        credentials: 'include'
+      });
+      
+      const data = await response.json();
+      console.log('Fetched classes data:', data);
+      
+      if (data.success && data.data.classes) {
+        // Extract unique subjects from enrolled classes
+        const subjects = data.data.classes.map((cls: any) => cls.subject as string);
+        const uniqueSubjects = Array.from(new Set(subjects)) as string[];
+        console.log('User enrolled subjects:', uniqueSubjects);
+        setUserSubjects(uniqueSubjects);
+        
+        if (uniqueSubjects.length === 0) {
+          console.warn('No subjects found. User may not be enrolled in any classes.');
         }
-        return;
-      } else if ((fileType === 'application/pdf' || fileName.endsWith('.pdf')) ||
-        (fileType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' || fileName.endsWith('.docx'))) {
-        // Check if userId is available before calling API
-        if (!userId) {
-          alert('Please log in to parse PDF or DOCX files.');
-          return;
-        }
-
-        const formData = new FormData();
-        formData.append('file', file);
-        formData.append('analysisType', uploadAnalysisType);
-
-        console.log('Calling analyze API for file:', fileName); // Debug log
-        const response = await fetch(`/api/student_page/flashcard/analyze?userId=${userId}`, {
-          method: 'POST',
-          body: formData,
-        });
-
-        let data: AnalyzeResponse;
-        try {
-          data = await response.json();
-        } catch (e) {
-          console.error('Failed to parse analyze API JSON response', e);
-          alert('Failed to parse server response while analyzing file.');
-          return;
-        }
-        console.log('API response:', data); // Debug log
-
-        if (response.ok) {
-          if (uploadAnalysisType === 'summary' && data.result?.summary) {
-            setCards([{ question: 'Summary', answer: data.result.summary }]);
-            setPreview([{ question: 'Summary', answer: data.result.summary.substring(0, 200) + (data.result.summary.length > 200 ? '...' : '') }]);
-          } else if (data.result?.cards && data.result.cards.length > 0) {
-            setPreview(data.result.cards.slice(0, 5));
-            setCards(data.result.cards);
-          } else {
-            alert('No cards generated from file. Try a different type.');
-          }
-        } else {
-          alert(`Failed to parse ${fileName.endsWith('.pdf') ? 'PDF' : 'DOCX'} file. Error: ${data.message || 'Unknown error'}. Ensure the file contains extractable text.`);
-        }
-        return;
       } else {
-        alert('Unsupported file type. Please use CSV, TXT, PDF, or DOCX files.');
-        return;
+        console.error('Failed to fetch classes:', data);
       }
-
-      // For non-CSV files, set a preview message
-      setPreview([{
-        question: 'File uploaded successfully',
-        answer: `${file.name} (${text.length} characters)`
-      }]);
-      setCards([]);
-
     } catch (error) {
-      console.error('Error parsing file:', error);
-      alert('Failed to parse file. Please try again.');
-    } finally {
-      setParsingLoading(false);
+      console.error('Error fetching user subjects:', error);
     }
   };
 
@@ -227,11 +144,17 @@ export default function UploadFlashcardPage() {
       return;
     }
 
+    if (analysisType === 'flashcards' && !subject) {
+      alert('Please select a subject/class for this flashcard set');
+      return;
+    }
+
     setAiLoading(true);
     try {
       const formData = new FormData();
       if (text) formData.append('text', text);
       formData.append('analysisType', analysisType);
+      if (subject) formData.append('subject', subject);
 
       const response = await fetch(`/api/student_page/flashcard/analyze?userId=${userId}`, {
         method: 'POST',
@@ -259,50 +182,14 @@ export default function UploadFlashcardPage() {
   };
 
   // New Zapier AI handlers
-  const handleZapierTextGeneration = async () => {
-    if (!zapierText.trim()) {
-      alert('Please enter some text content');
-      return;
-    }
-
-    setZapierLoading(true);
-    try {
-      const response = await fetch(`/api/student_page/flashcard/generate-from-text?userId=${userId}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          content: zapierText,
-          title: deckTitle || 'Zapier AI Flashcards',
-          difficulty: 'medium',
-          aiProvider: 'gemini',
-          maxCards: aiCardCount
-        })
-      });
-
-      const data = await response.json();
-      if (data.success) {
-        setZapierResult(data);
-        setDeckTitle(data.flashcard.title);
-        alert(`✅ Success! Generated ${data.flashcard.cardsGenerated} flashcards`);
-        // Redirect to library
-        if (isPublic) {
-          router.push('/student_page/public_library');
-        } else {
-          router.push('/student_page/private_library');
-        }
-      } else {
-        alert(data.error);
-      }
-    } catch (error) {
-      alert('Failed to generate flashcards from text');
-    } finally {
-      setZapierLoading(false);
-    }
-  };
-
   const handleZapierFileGeneration = async () => {
     if (!zapierFile) {
       alert('Please select a file');
+      return;
+    }
+
+    if (!subject) {
+      alert('Please select a subject/class for this flashcard set');
       return;
     }
 
@@ -310,93 +197,40 @@ export default function UploadFlashcardPage() {
     setZapierResult(null);
 
     try {
-      // Step 1: First analyze/extract content from the file
-      console.log('Step 1: Analyzing file content...');
-      const analyzeFormData = new FormData();
-      analyzeFormData.append('file', zapierFile);
-      analyzeFormData.append('analysisType', 'flashcards');
+      console.log('Generating flashcards from file using AI...');
+      
+      // Use the new generate-from-file API directly
+      const formData = new FormData();
+      formData.append('file', zapierFile);
+      formData.append('title', deckTitle || zapierFile.name.replace(/\.[^/.]+$/, ''));
+      formData.append('difficulty', 'medium');
+      formData.append('maxCards', zapierCardCount.toString());
+      formData.append('tags', JSON.stringify(['ai-generated', 'file-upload']));
+      if (subject) formData.append('subject', subject);
 
-      const analyzeResponse = await fetch(`/api/student_page/flashcard/analyze?userId=${userId}`, {
+      const response = await fetch(`/api/student_page/flashcard/generate-from-file?userId=${userId}`, {
         method: 'POST',
-        body: analyzeFormData
+        body: formData
       });
 
-      if (!analyzeResponse.ok) {
-        throw new Error('Failed to analyze file content');
-      }
+      const data = await response.json();
+      console.log('File processing result:', data);
 
-      const analyzeData = await analyzeResponse.json();
-      console.log('File analysis result:', analyzeData);
-
-      if (!analyzeData.result?.content && (!analyzeData.result?.cards || analyzeData.result.cards.length === 0)) {
-        throw new Error('Could not extract meaningful content from the file');
-      }
-
-      // Step 2: Generate flashcards using the extracted content
-      console.log('Step 2: Generating flashcards...');
-      let generatedCards = [];
-
-      if (analyzeData.result.cards && analyzeData.result.cards.length > 0) {
-        // Use cards from analysis if available
-        generatedCards = analyzeData.result.cards.slice(0, zapierCardCount);
-      } else if (analyzeData.result.content) {
-        // Generate cards from extracted content using text API
-        const textResponse = await fetch(`/api/student_page/flashcard/generate-from-text?userId=${userId}`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            content: analyzeData.result.content,
-            title: deckTitle || zapierFile.name.replace(/\.[^/.]+$/, ''),
-            difficulty: 'medium',
-            aiProvider: 'gemini',
-            maxCards: zapierCardCount
-          })
-        });
-
-        if (textResponse.ok) {
-          const textData = await textResponse.json();
-          if (textData.success) {
-            setZapierResult(textData);
-            alert(`✅ Success! Generated ${textData.flashcard.cardsGenerated} flashcards from ${zapierFile.name}`);
-            // Redirect to library
-            if (isPublic) {
-              router.push('/student_page/public_library');
-            } else {
-              router.push('/student_page/private_library');
-            }
-            return;
-          }
+      if (data.success) {
+        setZapierResult(data);
+        alert(`✅ Success! Generated ${data.flashcard.cardsGenerated} flashcards from ${zapierFile.name}`);
+        
+        // Redirect to library
+        if (isPublic) {
+          router.push('/student_page/public_library');
+        } else {
+          // Add subject as query parameter to auto-expand the folder
+          const subjectParam = subject ? `?subject=${encodeURIComponent(subject)}` : '';
+          router.push(`/student_page/private_library${subjectParam}`);
         }
+      } else {
+        throw new Error(data.error || 'Failed to generate flashcards');
       }
-
-      // Step 3: Create flashcard set if we have generated cards
-      if (generatedCards.length > 0) {
-        const createResponse = await fetch(`/api/student_page/flashcard?userId=${userId}`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            title: deckTitle || `${zapierFile.name} Flashcards`,
-            cards: generatedCards,
-            difficulty: analyzeData.result.difficulty || 'medium',
-            tags: [...(analyzeData.result.tags || []), 'ai-generated', 'file-upload'],
-            accessType: isPublic ? 'public' : 'private'
-          })
-        });
-
-        if (createResponse.ok) {
-          const createData = await createResponse.json();
-          alert(`✅ Success! Generated ${generatedCards.length} flashcards from ${zapierFile.name}`);
-          // Redirect to library
-          if (isPublic) {
-            router.push('/student_page/public_library');
-          } else {
-            router.push('/student_page/private_library');
-          }
-          return;
-        }
-      }
-
-      throw new Error('Failed to generate flashcards from file content');
 
     } catch (error) {
       console.error('File processing error:', error);
@@ -409,6 +243,11 @@ export default function UploadFlashcardPage() {
   const handleClassFileGeneration = async () => {
     if (!selectedClass || !selectedResource) {
       alert('Please select a class and resource');
+      return;
+    }
+
+    if (!subject) {
+      alert('Please select a subject/class for this flashcard set');
       return;
     }
 
@@ -425,7 +264,8 @@ export default function UploadFlashcardPage() {
           title: deckTitle,
           difficulty: 'medium',
           aiProvider: 'gemini',
-          maxCards: classFileCardCount
+          maxCards: classFileCardCount,
+          subject: subject || undefined
         })
       });
 
@@ -443,7 +283,9 @@ export default function UploadFlashcardPage() {
         if (isPublic) {
           router.push('/student_page/public_library');
         } else {
-          router.push('/student_page/private_library');
+          // Add subject as query parameter to auto-expand the folder
+          const subjectParam = subject ? `?subject=${encodeURIComponent(subject)}` : '';
+          router.push(`/student_page/private_library${subjectParam}`);
         }
       } else {
         alert(`Failed to generate flashcards: ${data.error}`);
@@ -480,8 +322,24 @@ export default function UploadFlashcardPage() {
     const cardsSource = cards?.length ? cards : (aiResult?.cards?.length ? aiResult.cards : preview);
     if (!cardsSource || cardsSource.length === 0) return;
 
+    // Validate subject before proceeding
+    if (!subject || subject.trim() === '') {
+      alert('Please select a subject/class before creating the flashcard set');
+      return;
+    }
+
     setLoading(true);
     try {
+      // Validate subject
+      const trimmedSubject = subject && typeof subject === 'string' ? subject.trim() : '';
+      if (!trimmedSubject) {
+        console.error('❌ ERROR: Subject is empty!');
+        alert('Subject/Class is required. Please select a class before creating.');
+        setLoading(false);
+        return;
+      }
+
+      console.log('✅ Creating flashcard with subject:', trimmedSubject);
       const response = await fetch(`/api/student_page/flashcard?userId=${userId}`, {
         method: 'POST',
         headers: {
@@ -492,6 +350,7 @@ export default function UploadFlashcardPage() {
           cards: cardsSource,
           difficulty: aiResult?.difficulty || 'medium',
           tags: aiResult?.tags || ['ai-generated'],
+          subject: trimmedSubject, // Use validated subject
           accessType: isPublic ? 'public' : 'private'
         }),
       });
@@ -502,7 +361,9 @@ export default function UploadFlashcardPage() {
         if (isPublic) {
           router.push('/student_page/public_library');
         } else {
-          router.push('/student_page/private_library');
+          // Add subject as query parameter to auto-expand the folder
+          const subjectParam = subject ? `?subject=${encodeURIComponent(subject)}` : '';
+          router.push(`/student_page/private_library${subjectParam}`);
         }
       } else {
         alert(data.message || 'Failed to create flashcard set');
@@ -522,41 +383,6 @@ export default function UploadFlashcardPage() {
     } else if (activeTab === 'zapier-file' || activeTab === 'class-files') {
       // These tabs handle submission in their own handlers
       return;
-    } else {
-      if (!file) return;
-      if (!userId) { alert('Please log in to create a set.'); return; }
-      if (preview.length === 0) { alert('No parsed cards found. Please use CSV or switch to AI Generate.'); return; }
-
-      setLoading(true);
-      try {
-        const response = await fetch(`/api/student_page/flashcard?userId=${userId}`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            title: deckTitle || (file?.name?.replace(/\.[^/.]+$/, "")) || 'Uploaded Flashcards',
-            cards: cards,
-            difficulty: 'medium',
-            tags: category ? [category] : [],
-            accessType: isPublic ? 'public' : 'private'
-          })
-        });
-
-        const data = await response.json();
-        if (!response.ok) {
-          throw new Error(data?.message || 'Failed to create flashcard set');
-        }
-
-        if (isPublic) {
-          router.push('/student_page/public_library');
-        } else {
-          router.push('/student_page/private_library');
-        }
-      } catch (error) {
-        console.error('Failed to upload deck:', error);
-        alert('Failed to create flashcard set from file.');
-      } finally {
-        setLoading(false);
-      }
     }
   };
 
@@ -582,15 +408,6 @@ export default function UploadFlashcardPage() {
       <div className="mb-8">
         <div className="flex space-x-1 bg-slate-200 dark:bg-slate-700 p-1 rounded-lg">
           <button
-            onClick={() => setActiveTab('upload')}
-            className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition-colors ${activeTab === 'upload'
-              ? 'bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 shadow-sm'
-              : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100'
-              }`}
-          >
-            📁 Upload File
-          </button>
-          <button
             onClick={() => setActiveTab('ai')}
             className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition-colors ${activeTab === 'ai'
               ? 'bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 shadow-sm'
@@ -606,7 +423,7 @@ export default function UploadFlashcardPage() {
               : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100'
               }`}
           >
-            ⚡ AI File Upload
+            ⚡ AI File Generator
           </button>
           <button
             onClick={() => setActiveTab('class-files')}
@@ -621,60 +438,6 @@ export default function UploadFlashcardPage() {
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-8">
-        {/* File Upload Tab */}
-        {activeTab === 'upload' && (
-          <div className="bg-white dark:bg-slate-800 p-6 rounded-xl border border-slate-200 dark:border-slate-700">
-            <h2 className="text-xl font-semibold text-slate-900 dark:text-slate-100 mb-6">Upload File</h2>
-
-            {/* Upload analysis type */}
-            <div className="mb-6">
-              <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Output Type:</label>
-              <select
-                value={uploadAnalysisType}
-                onChange={(e) => setUploadAnalysisType(e.target.value as 'flashcards' | 'summary' | 'quiz')}
-                className="w-full p-3 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-green-500 focus:border-transparent"
-              >
-                <option value="flashcards">Generate Flashcards</option>
-                <option value="summary">Create Summary</option>
-                <option value="quiz">Generate Quiz</option>
-              </select>
-            </div>
-
-            <div className="mb-6">
-              <div className="border-2 border-dashed border-slate-300 dark:border-slate-600 rounded-lg p-8 text-center">
-                <input
-                  type="file"
-                  accept=".csv,.txt,.pdf,.docx"
-                  onChange={handleFileChange}
-                  className="hidden"
-                  id="file-upload"
-                  disabled={parsingLoading} // Disable during parsing
-                />
-                <label htmlFor="file-upload" className="cursor-pointer">
-                  <svg className="w-12 h-12 text-slate-400 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
-                  </svg>
-                  <p className="text-lg font-medium text-slate-700 dark:text-slate-300 mb-2">
-                    {parsingLoading ? 'Parsing file...' : file ? file.name : 'Choose a file to upload'}
-                  </p>
-                  <p className="text-sm text-slate-500 dark:text-slate-400">
-                    Supports CSV, TXT, PDF, and DOCX files. For PDFs or DOCX, use AI Generate for advanced analysis.
-                  </p>
-                </label>
-              </div>
-            </div>
-
-            <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
-              <h4 className="font-medium text-blue-900 dark:text-blue-100 mb-2">File Format Requirements:</h4>
-              <ul className="text-sm text-blue-800 dark:text-blue-200 space-y-1">
-                <li>• CSV: Two columns (Term, Definition)</li>
-                <li>• TXT: Each line should be &quot;Term,Definition&quot;</li>
-                <li>• PDF/DOCX: Text-based files (scanned images may not parse well)</li>
-              </ul>
-            </div>
-          </div>
-        )}
-
         {/* AI Analysis Tab */}
         {activeTab === 'ai' && (
           <div className="bg-white dark:bg-slate-800 p-6 rounded-xl border border-slate-200 dark:border-slate-700">
@@ -731,13 +494,44 @@ export default function UploadFlashcardPage() {
               </div>
             )}
 
+            {/* Subject/Class Selection for AI Generate */}
+            {analysisType === 'flashcards' && (
+              <div className="mb-6">
+                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                  Subject/Class *
+                </label>
+                <select
+                  value={subject}
+                  onChange={(e) => setSubject(e.target.value)}
+                  className="w-full p-3 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                  required
+                >
+                  <option value="">Select a subject/class...</option>
+                  {userSubjects.length > 0 ? (
+                    userSubjects.map((subj) => (
+                      <option key={subj} value={subj}>
+                        {subj}
+                      </option>
+                    ))
+                  ) : (
+                    <option value="" disabled>No enrolled classes found</option>
+                  )}
+                </select>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                  {userSubjects.length > 0 
+                    ? 'Choose from your enrolled classes' 
+                    : 'You need to join a class first to create flashcards'}
+                </p>
+              </div>
+            )}
+
             {/* Removed file upload from AI tab to keep it text-only */}
 
             {/* Analyze Button */}
             <button
               type="button"
               onClick={handleAIAnalyze}
-              disabled={aiLoading || (!text && !file)}
+              disabled={aiLoading || !text || (analysisType === 'flashcards' && !subject)}
               className="w-full bg-blue-600 text-white py-3 px-4 rounded-lg hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors font-medium"
             >
               {aiLoading ? (
@@ -785,9 +579,9 @@ export default function UploadFlashcardPage() {
         {/* Zapier AI File Upload Tab */}
         {activeTab === 'zapier-file' && (
           <div className="bg-white dark:bg-slate-800 p-6 rounded-xl border border-slate-200 dark:border-slate-700">
-            <h2 className="text-xl font-semibold text-slate-900 dark:text-slate-100 mb-6">AI-Powered File Upload</h2>
+            <h2 className="text-xl font-semibold text-slate-900 dark:text-slate-100 mb-6">AI-Powered File Generator</h2>
             <p className="text-sm text-slate-600 dark:text-slate-400 mb-6">
-              Upload files and let AI generate flashcards using advanced processing via Zapier
+              Upload files and let AI generate high-quality flashcards with advanced analysis
             </p>
 
             {/* File Upload */}
@@ -849,10 +643,37 @@ export default function UploadFlashcardPage() {
               </p>
             </div>
 
+            {/* Subject/Class Selection */}
+            <div className="mb-6">
+              <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                Subject/Class <span className="text-red-500">*</span>
+              </label>
+              <select
+                value={subject}
+                onChange={(e) => setSubject(e.target.value)}
+                required
+                className="w-full p-3 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+              >
+                <option value="">Select subject (required)</option>
+                {userSubjects.length > 0 ? (
+                  userSubjects.map((subj, index) => (
+                    <option key={index} value={subj}>
+                      {subj}
+                    </option>
+                  ))
+                ) : (
+                  <option disabled>No enrolled classes found</option>
+                )}
+              </select>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                {userSubjects.length > 0 ? 'Select the class/subject for these flashcards' : 'Please enroll in a class first'}
+              </p>
+            </div>
+
             <button
               type="button"
               onClick={handleZapierFileGeneration}
-              disabled={zapierLoading || !zapierFile}
+              disabled={zapierLoading || !zapierFile || !subject}
               className="w-full bg-purple-600 text-white py-3 px-4 rounded-lg hover:bg-purple-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors font-medium"
             >
               {zapierLoading ? (
@@ -907,6 +728,11 @@ export default function UploadFlashcardPage() {
                 onChange={(e) => {
                   setSelectedClass(e.target.value);
                   setSelectedResource('');
+                  // Auto-populate subject based on selected class
+                  const selectedClassObj = classes.find(c => c.id === e.target.value);
+                  if (selectedClassObj && selectedClassObj.subject) {
+                    setSubject(selectedClassObj.subject);
+                  }
                 }}
                 className="w-full p-3 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-green-500 focus:border-transparent"
                 disabled={classFilesLoading}
@@ -1022,126 +848,8 @@ export default function UploadFlashcardPage() {
           </div>
         )}
 
-        {/* Enhanced AI Text Tab */}
-        {activeTab === 'ai' && (
-          <div className="bg-white dark:bg-slate-800 p-6 rounded-xl border border-slate-200 dark:border-slate-700">
-            <h2 className="text-xl font-semibold text-slate-900 dark:text-slate-100 mb-6">AI Content Analyzer</h2>
-
-            {/* Toggle between local AI and Zapier AI */}
-            <div className="mb-6">
-              <div className="flex space-x-4 mb-4">
-                <button
-                  onClick={() => setAnalysisType('local')}
-                  className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${analysisType === 'local'
-                    ? 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200'
-                    : 'bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-400'
-                    }`}
-                >
-                  🔧 Local Processing
-                </button>
-                <button
-                  onClick={() => setAnalysisType('zapier')}
-                  className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${analysisType === 'zapier'
-                    ? 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200'
-                    : 'bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-400'
-                    }`}
-                >
-                  ⚡ Zapier AI
-                </button>
-              </div>
-            </div>
-
-            {/* Text Input */}
-            <div className="mb-6">
-              <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
-                {analysisType === 'zapier' ? 'Text for Zapier AI Processing:' : 'Paste Text:'}
-              </label>
-              <textarea
-                value={analysisType === 'zapier' ? zapierText : text}
-                onChange={(e) => analysisType === 'zapier' ? setZapierText(e.target.value) : setText(e.target.value)}
-                placeholder={analysisType === 'zapier'
-                  ? "Paste your content here for advanced AI processing via Zapier..."
-                  : "Paste your content here (notes, articles, study materials)..."}
-                rows={8}
-                className="w-full p-3 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-green-500 focus:border-transparent resize-vertical"
-              />
-              <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-                {analysisType === 'zapier' ? zapierText.length : text.length} characters
-                {analysisType === 'zapier' && ' (processed with advanced AI via Zapier)'}
-              </p>
-            </div>
-
-            {/* Analysis Type Selection for Local Processing */}
-            {analysisType !== 'zapier' && (
-              <div className="mb-6">
-                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Analysis Type:</label>
-                <select
-                  value={analysisType === 'zapier' ? 'flashcards' : analysisType}
-                  onChange={(e) => setAnalysisType(e.target.value)}
-                  className="w-full p-3 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                >
-                  <option value="flashcards">Generate Flashcards</option>
-                  <option value="summary">Create Summary</option>
-                  <option value="quiz">Generate Quiz</option>
-                </select>
-              </div>
-            )}
-
-            {/* Analyze Button */}
-            <button
-              type="button"
-              onClick={analysisType === 'zapier' ? handleZapierTextGeneration : handleAIAnalyze}
-              disabled={(analysisType === 'zapier' ? zapierLoading : aiLoading) ||
-                (analysisType === 'zapier' ? !zapierText : !text)}
-              className={`w-full py-3 px-4 rounded-lg font-medium transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed text-white ${analysisType === 'zapier'
-                ? 'bg-purple-600 hover:bg-purple-700'
-                : 'bg-blue-600 hover:bg-blue-700'
-                }`}
-            >
-              {(analysisType === 'zapier' ? zapierLoading : aiLoading) ? (
-                <>
-                  <svg className="animate-spin inline w-4 h-4 mr-2" fill="none" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                  </svg>
-                  {analysisType === 'zapier' ? `Generating ${aiCardCount} flashcards...` : 'Analyzing with AI...'}
-                </>
-              ) : (
-                analysisType === 'zapier' ? `⚡ Generate ${aiCardCount} Flashcards` : '✨ Analyze Content'
-              )}
-            </button>
-
-            {/* AI Results */}
-            {aiResult && analysisType !== 'zapier' && (
-              <div className="mt-6 p-4 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg">
-                <h3 className="text-lg font-semibold text-green-900 dark:text-green-100 mb-3">✅ Analysis Complete!</h3>
-
-                {analysisType === 'flashcards' && aiResult.cards && (
-                  <div>
-                    <p className="text-sm text-green-800 dark:text-green-200 mb-2">
-                      Generated {aiResult.cards.length} flashcards from your content
-                    </p>
-                    <p className="text-xs text-green-700 dark:text-green-300">
-                      Preview will show below. You can edit the title and settings before creating.
-                    </p>
-                  </div>
-                )}
-
-                {analysisType === 'summary' && (
-                  <div className="max-h-40 overflow-y-auto">
-                    <h4 className="font-medium mb-2">Summary:</h4>
-                    <p className="text-sm text-slate-700 dark:text-slate-300 whitespace-pre-wrap">
-                      {aiResult.summary || aiResult.content}
-                    </p>
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-        )}
-
         {/* Set Information - ensure it appears when preview exists too */}
-        {((activeTab === 'upload' && file) || (activeTab === 'ai' && (aiResult || preview.length > 0))) && (
+        {(activeTab === 'ai' && (aiResult || preview.length > 0)) && (
           <div className="bg-white dark:bg-slate-800 p-6 rounded-xl border border-slate-200 dark:border-slate-700">
             <h2 className="text-xl font-semibold text-slate-900 dark:text-slate-100 mb-6">Set Information</h2>
 
@@ -1160,39 +868,33 @@ export default function UploadFlashcardPage() {
                 />
               </div>
 
-              {activeTab === 'upload' && (
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
-                    Description
-                  </label>
-                  <textarea
-                    value={deckDescription}
-                    onChange={(e) => setDeckDescription(e.target.value)}
-                    className="w-full p-3 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                    placeholder="Add a description (optional)"
-                    rows={3}
-                  />
-                </div>
-              )}
-
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div>
                   <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
-                    Category
+                    Subject/Class *
                   </label>
                   <select
-                    value={category}
-                    onChange={(e) => setCategory(e.target.value)}
+                    value={subject}
+                    onChange={(e) => setSubject(e.target.value)}
                     className="w-full p-3 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                    required
                   >
-                    <option value="">Select category</option>
-                    <option value="Mathematics">Mathematics</option>
-                    <option value="Science">Science</option>
-                    <option value="History">History</option>
-                    <option value="Language">Language</option>
-                    <option value="Computer Science">Computer Science</option>
-                    <option value="Other">Other</option>
+                    <option value="">Select a subject/class...</option>
+                    {userSubjects.length > 0 ? (
+                      userSubjects.map((subj) => (
+                        <option key={subj} value={subj}>
+                          {subj}
+                        </option>
+                      ))
+                    ) : (
+                      <option value="" disabled>No enrolled classes found</option>
+                    )}
                   </select>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                    {userSubjects.length > 0 
+                      ? 'Choose from your enrolled classes' 
+                      : 'You need to join a class first to create flashcards'}
+                  </p>
                 </div>
 
                 <div className="flex items-center justify-center">
@@ -1282,8 +984,7 @@ export default function UploadFlashcardPage() {
           </button>
           <button
             type="submit"
-            disabled={loading || !deckTitle.trim() ||
-              (activeTab === 'upload' && (!file || cards.length === 0)) ||
+            disabled={loading || !deckTitle.trim() || !subject.trim() ||
               (activeTab === 'ai' && cards.length === 0) ||
               (activeTab === 'zapier-file') ||
               (activeTab === 'class-files')}
@@ -1300,7 +1001,7 @@ export default function UploadFlashcardPage() {
               </>
             ) : (
               <span>
-                {activeTab === 'ai' ? '✨ Create AI' : '📁 Create'} {isPublic ? 'Public' : 'Private'} Set
+                ✨ Create AI {isPublic ? 'Public' : 'Private'} Set
               </span>
             )}
           </button>

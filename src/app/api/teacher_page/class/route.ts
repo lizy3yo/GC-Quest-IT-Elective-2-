@@ -21,6 +21,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { connectToDatabase } from '@/lib/mongoose';
 import Class from '@/models/class';
 import User from '@/models/user';
+import { cache, cacheKeys, CACHE_TTL, cacheTags } from '@/lib/cache';
 
 //MIDDLEWARE
 import { authenticate } from '@/lib/middleware/authenticate';
@@ -44,12 +45,23 @@ export async function GET(request: NextRequest) {
       return authzResult as Response;
     }
 
-    await connectToDatabase();
-
     const { searchParams } = new URL(request.url);
     const isActive = searchParams.get('active'); // 'true', 'false'
     const limit = parseInt(searchParams.get('limit') || '50');
     const page = parseInt(searchParams.get('page') || '1');
+
+    // Check cache first
+    const cacheKey = `${cacheKeys.userClasses(authResult.userId.toString())}:teacher:${isActive}:${page}:${limit}`;
+    const cachedData = cache.get<any>(cacheKey);
+    if (cachedData) {
+      return NextResponse.json({
+        success: true,
+        data: cachedData,
+        cached: true
+      });
+    }
+
+    await connectToDatabase();
 
     // Build query
     const query: any = { teacherId: authResult.userId.toString() };
@@ -69,17 +81,26 @@ export async function GET(request: NextRequest) {
     // Get total count for pagination
     const total = await Class.countDocuments(query);
 
+    const responseData = {
+      classes,
+      pagination: {
+        current: page,
+        total: Math.ceil(total / limit),
+        count: classes.length,
+        totalItems: total
+      }
+    };
+
+    // Cache for 5 minutes
+    cache.set(cacheKey, responseData, {
+      ttl: CACHE_TTL.MEDIUM,
+      tags: [cacheTags.user(authResult.userId.toString())]
+    });
+
     return NextResponse.json({
       success: true,
-      data: {
-        classes,
-        pagination: {
-          current: page,
-          total: Math.ceil(total / limit),
-          count: classes.length,
-          totalItems: total
-        }
-      }
+      data: responseData,
+      cached: false
     });
 
   } catch (error) {
@@ -151,6 +172,9 @@ export async function POST(request: NextRequest) {
     newClass.generateclassCode();
 
     await newClass.save();
+
+    // Invalidate teacher's class cache
+    cache.invalidateByTag(cacheTags.user(authResult.userId.toString()));
 
     return NextResponse.json({
       success: true,

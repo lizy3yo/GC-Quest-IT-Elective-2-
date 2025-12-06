@@ -88,10 +88,12 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
         }
 
         const studentInfo = {
+            id: student._id.toString(),
             studentId: student._id.toString(),
-            firstName: student.firstName,
-            lastName: student.lastName,
-            email: student.email
+            firstName: student.firstName || '',
+            lastName: student.lastName || '',
+            email: student.email || '',
+            fullName: `${student.firstName || ''} ${student.lastName || ''}`.trim() || student.email?.split('@')[0] || 'Unknown Student'
         };
 
             const formattedSubmission = submission ? {

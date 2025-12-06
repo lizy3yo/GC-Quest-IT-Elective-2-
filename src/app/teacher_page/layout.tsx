@@ -5,6 +5,11 @@ import Link from "next/link";
 import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
+import Chatbot from "@/components/organisms/Chatbot/chatbot/Chatbot";
+// import TeacherBreadcrumbs from "@/components/ui/breadcrumbs/TeacherBreadcrumbs";
+import { ThemeProvider, useTheme } from "@/contexts/ThemeContext";
+import { ChevronsUpDown } from "lucide-react";
+import LogoutConfirmationModal from "@/components/molecules/LogoutConfirmationModal";
 
 interface TeacherLayoutProps {
   children: React.ReactNode;
@@ -21,17 +26,27 @@ interface SessionUser {
   [key: string]: unknown;
 }
 
-export default function TeacherLayout({ children }: TeacherLayoutProps) {
+function TeacherLayoutContent({ children }: TeacherLayoutProps) {
   const pathname = usePathname();
   const router = useRouter();
   const { data: session, status } = useSession();
+  const { resolvedTheme, setTheme } = useTheme();
   const [isProfileDropdownOpen, setIsProfileDropdownOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
   const [isLibraryDropdownOpen, setIsLibraryDropdownOpen] = useState(false);
 
   // Client-side authentication redirect
   useEffect(() => {
-    if (status === "unauthenticated") {
+    // Check both NextAuth session and manual auth tokens
+    const hasManualAuth = () => {
+      if (typeof window === "undefined") return false;
+      const accessToken = localStorage.getItem("accessToken");
+      const refreshToken = localStorage.getItem("refreshToken");
+      return !!(accessToken || refreshToken);
+    };
+
+    // Only redirect if BOTH session is unauthenticated AND no manual auth tokens
+    if (status === "unauthenticated" && !hasManualAuth()) {
       router.push(`/auth/login?redirect=${encodeURIComponent(pathname)}`);
     }
   }, [status, router, pathname]);
@@ -41,11 +56,35 @@ export default function TeacherLayout({ children }: TeacherLayoutProps) {
   const [userName, setUserName] = useState<string | null>(null);
   const [userEmail, setUserEmail] = useState<string | null>(null);
   const [userImage, setUserImage] = useState<string | null>(null);
-  const searchInputRef = useRef<HTMLInputElement | null>(null);
   const sidebarRef = useRef<HTMLElement | null>(null);
   const mouseMoveHandlerRef = useRef<((e: MouseEvent) => void) | null>(null);
   const bufferActiveRef = useRef(false);
   const COLLAPSE_BUFFER = 96;
+  
+  // Current time and date state
+  const [currentTime, setCurrentTime] = useState<string>("");
+  const [isMounted, setIsMounted] = useState(false);
+  const [isLogoutModalOpen, setIsLogoutModalOpen] = useState(false);
+
+  // Disable breadcrumb sessionStorage operations for teacher pages
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const storage: any = sessionStorage;
+    const origSet = storage.setItem.bind(storage);
+    const origRemove = storage.removeItem.bind(storage);
+    storage.setItem = (key: string, value: string) => {
+      if (typeof key === 'string' && key.startsWith('breadcrumb_')) return;
+      return origSet(key, value);
+    };
+    storage.removeItem = (key: string) => {
+      if (typeof key === 'string' && key.startsWith('breadcrumb_')) return;
+      return origRemove(key);
+    };
+    return () => {
+      storage.setItem = origSet;
+      storage.removeItem = origRemove;
+    };
+  }, []);
 
   useEffect(() => {
     let mounted = true;
@@ -63,7 +102,9 @@ export default function TeacherLayout({ children }: TeacherLayoutProps) {
           null;
         if (name) setUserName(name);
         if (parsed.email) setUserEmail(parsed.email);
-        if (parsed.image) setUserImage(parsed.image);
+        // Handle profile image - set to null if empty/removed, otherwise use the image
+        const imageUrl = parsed.profileImage || parsed.image || null;
+        setUserImage(imageUrl || null);
       } catch {
         // ignore
       }
@@ -97,7 +138,7 @@ export default function TeacherLayout({ children }: TeacherLayoutProps) {
 
         if (!res.ok) return;
 
-        const json = await res.json().catch(() => ({} as any));
+        const json = await res.json().catch(() => ({} as unknown));
         const dbUser = json?.user ?? json;
         if (!mounted || !dbUser) return;
 
@@ -108,7 +149,7 @@ export default function TeacherLayout({ children }: TeacherLayoutProps) {
           null;
         if (dbName) setUserName(dbName);
         if (dbUser.email) setUserEmail(dbUser.email);
-        if (dbUser.image) setUserImage(dbUser.image);
+        if (dbUser.profileImage || dbUser.image) setUserImage(dbUser.profileImage || dbUser.image);
       } catch {
         // silent
       }
@@ -118,6 +159,29 @@ export default function TeacherLayout({ children }: TeacherLayoutProps) {
       mounted = false;
     };
   }, [session]);
+
+  // Listen for profile updates (upload/remove photo)
+  useEffect(() => {
+    const handleProfileUpdate = () => {
+      try {
+        const raw = localStorage.getItem("user");
+        if (!raw) {
+          setUserImage(null);
+          return;
+        }
+        const parsed = JSON.parse(raw);
+        const imageUrl = parsed.profileImage || parsed.image || null;
+        setUserImage(imageUrl || null);
+      } catch {
+        // ignore
+      }
+    };
+
+    window.addEventListener("profileUpdated", handleProfileUpdate);
+    return () => {
+      window.removeEventListener("profileUpdated", handleProfileUpdate);
+    };
+  }, []);
 
   const stopBufferCollapse = () => {
     bufferActiveRef.current = false;
@@ -200,6 +264,32 @@ export default function TeacherLayout({ children }: TeacherLayoutProps) {
     return () => window.removeEventListener("resize", checkMobile);
   }, []);
 
+  // Update current time and date
+  useEffect(() => {
+    setIsMounted(true);
+    
+    const updateTime = () => {
+      const now = new Date();
+      const timeString = now.toLocaleTimeString("en-US", {
+        hour: "numeric",
+        minute: "2-digit",
+        hour12: true,
+      });
+      const dateString = now.toLocaleDateString("en-US", {
+        weekday: "long",
+        year: "numeric",
+        month: "long",
+        day: "numeric",
+      });
+      setCurrentTime(`${timeString} • ${dateString}`);
+    };
+
+    updateTime();
+    const interval = setInterval(updateTime, 60000); // Update every minute
+
+    return () => clearInterval(interval);
+  }, []);
+
   useEffect(() => {
     if (isMobile && isMobileMenuOpen) {
       document.body.classList.add("overflow-hidden");
@@ -219,15 +309,8 @@ export default function TeacherLayout({ children }: TeacherLayoutProps) {
   }, [isMobileMenuOpen]);
 
   const toggleDarkMode = () => {
-    const currentTheme = localStorage.getItem("theme");
-    const newTheme = currentTheme === "dark" ? "light" : "dark";
-    localStorage.setItem("theme", newTheme);
-
-    if (newTheme === "dark") {
-      document.documentElement.classList.add("dark");
-    } else {
-      document.documentElement.classList.remove("dark");
-    }
+    const newTheme = resolvedTheme === "dark" ? "light" : "dark";
+    setTheme(newTheme);
   };
 
   const handleLogout = async () => {
@@ -250,23 +333,22 @@ export default function TeacherLayout({ children }: TeacherLayoutProps) {
         console.warn("Logout request failed, frontend cleaned up anyway");
       }
 
-      window.location.href = "/auth/login";
+      window.location.href = "/auth/login?reason=logout";
     } catch (error) {
       console.error("Logout failed:", error);
       localStorage.removeItem("user");
       localStorage.removeItem("accessToken");
-      window.location.href = "/auth/login";
+      window.location.href = "/auth/login?reason=logout";
     }
   };
 
   const isExpanded = !isSidebarCollapsed || isTouchExpanded;
 
-  // Navigation items (update this list to reflect your folders/routes)
   const navItems: { href: string; label: string; match: (p?: string | null) => boolean; icon: React.ReactNode }[] = [
     {
       href: "/teacher_page/dashboard",
       label: "Dashboard",
-      match: (p) => p === "/teacher_page/dashboard",
+      match: (p?: string | null) => p === "/teacher_page/dashboard",
       icon: (
         <svg className="flex-shrink-0 transition-transform duration-300 hover:scale-110" width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2H5a2 2 0 00-2-2z" />
@@ -275,9 +357,9 @@ export default function TeacherLayout({ children }: TeacherLayoutProps) {
       ),
     },
     {
-      href: "/teacher_page/class",
+      href: "/teacher_page/classes",
       label: "Classes",
-      match: (p) => p === "/teacher_page/class",
+      match: (p?: string | null) => (p ? p.startsWith("/teacher_page/classes") : false),
       icon: (
         <svg className="flex-shrink-0 transition-transform duration-300 hover:scale-110" width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
@@ -285,19 +367,72 @@ export default function TeacherLayout({ children }: TeacherLayoutProps) {
       ),
     },
     {
-      href: "/teacher_page/analytics",
-      label: "Analytics",
-      match: (p) => p === "/teacher_page/analytics",
+      href: "/teacher_page/assessment",
+      label: "Assessments",
+      match: (p?: string | null) => (p ? p.startsWith("/teacher_page/assessment") : false),
+        icon: (
+          <svg className="flex-shrink-0 transition-transform duration-300 hover:scale-110" width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" />
+          </svg>
+        ),
+      },
+      {
+        href: "/teacher_page/library",
+        label: "Library",
+        match: (p?: string | null) => (p ? p.startsWith("/teacher_page/library") || p.startsWith("/teacher_page/flashcard") : false),
+        icon: (
+          <svg className="flex-shrink-0 transition-transform duration-300 hover:scale-110" width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+          </svg>
+        ),
+      },
+      {
+        href: "/teacher_page/leaderboards",
+        label: "Leaderboards",
+        match: (p?: string | null) => p === "/teacher_page/leaderboards",
+        icon: (
+          <svg className="flex-shrink-0 transition-transform duration-300 hover:scale-110" width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z" />
+          </svg>
+        ),
+      },
+  ];
+
+  const quickAccessItems = [
+    {
+      href: "/teacher_page/ai-studio",
+      label: "AI Assessments",
+      match: (p?: string | null) => p === "/teacher_page/ai-studio",
       icon: (
         <svg className="flex-shrink-0 transition-transform duration-300 hover:scale-110" width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 3v18M20 12v6M2 7v12" />
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+        </svg>
+      ),
+    },
+    {
+      href: "/teacher_page/ai-studio-resources",
+      label: "AI Resources",
+      match: (p?: string | null) => p === "/teacher_page/ai-studio-resources",
+      icon: (
+        <svg className="flex-shrink-0 transition-transform duration-300 hover:scale-110" width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+        </svg>
+      ),
+    },
+    {
+      href: "/teacher_page/study_rooms",
+      label: "Study Rooms",
+      match: (p?: string | null) => (p ? p.startsWith("/teacher_page/study_rooms") : false),
+      icon: (
+        <svg className="flex-shrink-0 transition-transform duration-300 hover:scale-110" width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
         </svg>
       ),
     },
   ];
 
   return (
-    <div className="min-h-screen bg-slate-50 dark:bg-slate-900 transition-colors duration-300">
+    <div className={`min-h-screen bg-slate-50 transition-colors duration-300 ${resolvedTheme === 'dark' ? 'dark' : ''}`} style={resolvedTheme === 'dark' ? { backgroundColor: '#090909' } : {}}>
       {isMobile && (
         <header className="fixed top-0 left-0 right-0 h-14 z-[70] bg-white/90 dark:bg-slate-900/90 backdrop-blur border-b border-slate-200 dark:border-slate-800 flex items-center justify-between px-4 sm:px-6">
           <div className="flex items-center gap-2">
@@ -370,78 +505,54 @@ export default function TeacherLayout({ children }: TeacherLayoutProps) {
                     aria-label={isSidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
                     className={`p-2 rounded-lg transition-all duration-300 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 ${isSidebarCollapsed ? "mx-auto" : ""}`}
                   >
-                    <svg className={`transition-transform duration-300 ${isSidebarCollapsed ? "rotate-180" : ""}`} width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 19l-7-7 7-7m8 14l-7-7 7-7" />
+                    {/* Hamburger icon to match mobile navbar */}
+                    <svg width="24" height="24" stroke="currentColor" fill="none" viewBox="0 0 24 24">
+                      <path strokeWidth={2} strokeLinecap="round" d="M4 7h16M4 12h16M4 17h16" />
                     </svg>
                   </button>
                 )}
               </div>
 
-              {isExpanded ? (
-                <div className="relative -mx-2">
-                  <input
-                    ref={searchInputRef}
-                    type="text"
-                    placeholder="Search"
-                    className="w-full py-2.5 pl-12 pr-6 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm outline-none transition-all duration-300 font-medium text-slate-500 dark:text-slate-400 placeholder:text-slate-400 dark:placeholder:text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-700 hover:text-slate-700 dark:hover:text-slate-200 focus:bg-white dark:focus:bg-slate-900 focus:border-green-500 focus:text-slate-900 dark:focus:text-slate-100 focus:shadow-[0_0_0_4px_rgba(34,197,94,0.1)]"
-                  />
-                  <svg className="absolute left-6 top-1/2 transform -translate-y-1/2 text-slate-400 dark:text-slate-500 z-10 transition-colors duration-200 flex-shrink-0" width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                  </svg>
-                </div>
-              ) : (
-                <div className="relative">
-                  <button
-                    onClick={() => {
-                      setIsTouchExpanded(true);
-                      setTimeout(() => searchInputRef.current?.focus(), 0);
-                    }}
-                    className="w-full flex items-center justify-center p-2.5 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800"
-                    title="Search"
-                  >
-                    <svg className="text-slate-500 dark:text-slate-400" width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                    </svg>
-                  </button>
-                </div>
-              )}
+
             </div>
 
             <div className="flex-1 min-h-0 overflow-hidden">
               <div className="h-full overflow-y-auto scrollbar-hide" style={{ maxHeight: "calc(100vh - 280px)" }}>
                 <nav className="py-4">
                   <div className="mb-6">
-                    {navItems.slice(0, 2).map((item) => {
+                    {navItems.map((item) => {
                       const active = item.match(pathname);
                       return (
                         <Link
                           key={item.href}
                           href={item.href}
                           title={!isExpanded ? item.label : ""}
-                          className={`flex items-center ${!isExpanded ? "justify-center w-full p-2.5 mx-0" : "gap-4 px-5 py-2.5 mx-4"} text-slate-500 dark:text-slate-400 no-underline text-sm font-medium transition-all duration-300 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800 hover:text-slate-800 dark:hover:text-slate-200 ${isExpanded ? "hover:translate-x-1" : ""} ${active ? "bg-gradient-to-br from-green-500/10 to-green-600/5 text-green-500 font-semibold shadow-[0_2px_8px_rgba(34,197,94,0.1)]" : ""}`}
+                          className={`flex items-center ${!isExpanded ? "justify-center w-full p-2.5 mx-0" : "gap-4 px-5 py-2.5 mx-4"} text-slate-500 dark:text-slate-400 no-underline text-sm font-medium transition-all duration-300 rounded-xl hover:bg-[#E8F5E9] dark:hover:bg-slate-800 hover:text-[#2E7D32] dark:hover:text-slate-200 ${isExpanded ? "hover:translate-x-1" : ""} ${active ? "bg-[#E8F5E9] text-[#2E7D32] font-semibold shadow-[0_2px_8px_rgba(46,125,50,0.15)]" : ""}`}
                         >
-                          {React.cloneElement(item.icon as any, { className: `${(item.icon as any).props.className} ${active ? "text-green-500" : ""}` })}
+                          {React.cloneElement(item.icon as any, { className: `${(item.icon as any).props.className} ${active ? "text-[#2E7D32]" : ""}` })}
                           {isExpanded && <span className="truncate text-sm text-slate-700 dark:text-slate-200">{item.label}</span>}
                         </Link>
                       );
                     })}
-
-                    <div className="relative">{isLibraryDropdownOpen && isExpanded && null}</div>
                   </div>
 
                   <div className="mb-4">
-                    {/* "Start here" header removed */}
+                    {isExpanded && (
+                      <div className="text-slate-400 dark:text-slate-500 text-xs font-bold uppercase tracking-wider px-6 mb-3">
+                        Quick Access
+                      </div>
+                    )}
 
-                    {navItems.slice(2).map((item) => {
+                    {quickAccessItems.map((item) => {
                       const active = item.match(pathname);
                       return (
                         <Link
                           key={item.href}
                           href={item.href}
                           title={!isExpanded ? item.label : ""}
-                          className={`flex items-center ${!isExpanded ? "justify-center w-full p-2.5 mx-0" : "gap-4 px-5 py-2.5 mx-4"} text-slate-500 dark:text-slate-400 no-underline text-sm font-medium transition-all duration-300 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800 hover:text-slate-800 dark:hover:text-slate-200 ${isExpanded ? "hover:translate-x-1" : ""} ${active ? "bg-gradient-to-br from-green-500/10 to-green-600/5 text-green-500 font-semibold shadow-[0_2px_8px_rgba(34,197,94,0.1)]" : ""}`}
+                          className={`flex items-center ${!isExpanded ? "justify-center w-full p-2.5 mx-0" : "gap-4 px-5 py-2.5 mx-4"} text-slate-500 dark:text-slate-400 no-underline text-sm font-medium transition-all duration-300 rounded-xl hover:bg-[#E8F5E9] dark:hover:bg-slate-800 hover:text-[#2E7D32] dark:hover:text-slate-200 ${isExpanded ? "hover:translate-x-1" : ""} ${active ? "bg-[#E8F5E9] text-[#2E7D32] font-semibold shadow-[0_2px_8px_rgba(46,125,50,0.15)]" : ""}`}
                         >
-                          {React.cloneElement(item.icon as any, { className: `${(item.icon as any).props.className} ${active ? "text-green-500" : ""}` })}
+                          {React.cloneElement(item.icon as any, { className: `${(item.icon as any).props.className} ${active ? "text-[#2E7D32]" : ""}` })}
                           {isExpanded && <span className="truncate text-sm text-slate-700 dark:text-slate-200">{item.label}</span>}
                         </Link>
                       );
@@ -474,39 +585,97 @@ export default function TeacherLayout({ children }: TeacherLayoutProps) {
                     )}
                   </div>
                   {isExpanded && (
-                    <div className="flex-1 min-w-0 text-left">
-                      <div className="text-sm font-semibold text-slate-800 dark:text-slate-200 truncate">{userName ?? "Teacher"}</div>
-                      <div className="text-xs text-slate-500 dark:text-slate-400 truncate">{userEmail ?? ""}</div>
-                    </div>
+                    <>
+                      <div className="flex-1 min-w-0 text-left">
+                        <div className="text-sm font-semibold text-slate-800 dark:text-slate-200 truncate">{userName ?? "Teacher"}</div>
+                        <div className="text-xs text-slate-500 dark:text-slate-400 truncate">{userEmail ?? ""}</div>
+                      </div>
+                      <ChevronsUpDown className="flex-shrink-0 text-slate-400 dark:text-slate-500 transition-colors duration-300 group-hover:text-slate-600 dark:group-hover:text-slate-300" size={16} />
+                    </>
                   )}
                 </button>
 
                 {isProfileDropdownOpen && (
                   <div className={`${isExpanded ? "absolute bottom-[calc(100%+0.5rem)] left-0 right-0" : "absolute bottom-[calc(100%+0.5rem)] left-[calc(100%+0.5rem)] w-72"} bg-white dark:bg-slate-900 rounded-2xl shadow-[0_20px_25px_-5px_rgba(0,0,0,0.1),0_10px_10px_-5px_rgba(0,0,0,0.04)] dark:shadow-[0_20px_25px_-5px_rgba(0,0,0,0.4),0_10px_10px_-5px_rgba(0,0,0,0.2)] border border-slate-200 dark:border-slate-800 z-[1000] overflow-hidden animate-in slide-in-from-bottom-2 duration-200`}>
       
+                    {/* Profile and quick links */}
+                    <div className="py-2 border-b border-slate-100 dark:border-slate-800">
+                      <Link
+                        href="/teacher_page/profile"
+                        className="group flex items-center gap-3 px-4 py-3 text-slate-500 dark:text-slate-400 no-underline text-sm font-medium transition-all duration-300 border-none bg-transparent w-full text-left cursor-pointer rounded-lg hover:bg-[#E8F5E9] dark:hover:bg-slate-800 hover:text-[#2E7D32] dark:hover:text-slate-200 hover:translate-x-1"
+                      >
+                        <svg
+                          className="flex-shrink-0 transition-transform duration-300 group-hover:scale-110"
+                          width="18"
+                          height="18"
+                          fill="none"
+                          stroke="currentColor"
+                          viewBox="0 0 24 24"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={2}
+                            d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"
+                          />
+                        </svg>
+                        <span>Profile</span>
+                      </Link>
+                    </div>
+
                     {/* quick links and actions */}
                     <div className="py-2">
 
-                      <Link href="/teacher_page/settings" className="group flex items-center gap-3 px-4 py-3 text-slate-600 dark:text-slate-300 no-underline text-sm font-medium transition-colors duration-200 hover:bg-slate-50 dark:hover:bg-slate-800">
-                        Settings
+                      <Link href="/teacher_page/history" className="group flex items-center gap-3 px-4 py-3 text-slate-500 dark:text-slate-400 no-underline text-sm font-medium transition-all duration-300 hover:bg-[#E8F5E9] dark:hover:bg-slate-800 hover:text-[#2E7D32] dark:hover:text-slate-200 hover:translate-x-1">
+                        <svg className="flex-shrink-0 transition-transform duration-300 group-hover:scale-110" width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                        <span>History</span>
+                      </Link>
+
+                      <Link href="/teacher_page/analytics" className="group flex items-center gap-3 px-4 py-3 text-slate-500 dark:text-slate-400 no-underline text-sm font-medium transition-all duration-300 hover:bg-[#E8F5E9] dark:hover:bg-slate-800 hover:text-[#2E7D32] dark:hover:text-slate-200 hover:translate-x-1">
+                        <svg className="flex-shrink-0 transition-transform duration-300 group-hover:scale-110" width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                        </svg>
+                        <span>Analytics</span>
                       </Link>
 
                       <button
                         onClick={toggleDarkMode}
-                        className="w-full text-left px-4 py-3 text-sm text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors duration-200 flex items-center gap-3"
+                        className="group flex items-center gap-3 px-4 py-3 text-slate-500 dark:text-slate-400 no-underline text-sm font-medium transition-all duration-300 border-none bg-transparent w-full text-left cursor-pointer hover:bg-[#E8F5E9] dark:hover:bg-slate-800 hover:text-[#2E7D32] dark:hover:text-slate-200 hover:translate-x-1"
                         aria-label="Toggle dark mode"
                       >
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" className="text-slate-500 dark:text-slate-300">
-                          <path strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
+                        <svg className="flex-shrink-0 transition-transform duration-300 group-hover:scale-110" width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path className="block dark:hidden" strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
+                          <path className="hidden dark:block" strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
                         </svg>
-                        Dark mode
+                        <span className="block dark:hidden">Dark Mode</span>
+                        <span className="hidden dark:block">Light Mode</span>
                       </button>
                     </div>
 
                     {/* footer actions */}
                     <div className="py-2 border-t border-slate-100 dark:border-slate-800">
-                      <button onClick={handleLogout} className="w-full text-left px-4 py-3 text-sm text-red-600 dark:text-red-400 hover:bg-slate-50 dark:hover:bg-slate-800 rounded-md transition-colors duration-150">
-                        Sign out
+                      <button
+                        onClick={() => setIsLogoutModalOpen(true)}
+                        className="group flex items-center gap-3 px-4 py-3 text-red-600 dark:text-red-400 no-underline text-sm font-medium transition-all duration-200 border-none bg-transparent w-full text-left cursor-pointer hover:bg-red-50 dark:hover:bg-red-950/20 hover:text-red-600"
+                      >
+                        <svg
+                          className="flex-shrink-0 transition-transform duration-200 group-hover:scale-110"
+                          width="18"
+                          height="18"
+                          fill="none"
+                          stroke="currentColor"
+                          viewBox="0 0 24 24"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={2}
+                            d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"
+                          />
+                        </svg>
+                        <span>Log out</span>
                       </button>
                     </div>
                   </div>
@@ -520,10 +689,48 @@ export default function TeacherLayout({ children }: TeacherLayoutProps) {
           <div className="fixed inset-0 z-40 bg-slate-900/50 backdrop-blur-sm lg:hidden" onClick={() => setIsMobileMenuOpen(false)} aria-hidden="true" />
         )}
 
-        <main className={`flex-1 p-8 transition-all duration-300 ${isMobile ? "ml-0 pt-16" : isExpanded ? "ml-80" : "ml-20"}`}>
-          {children}
-        </main>
+        <main className={`flex-1 transition-all duration-300 ${isMobile ? "ml-0 pt-16" : isExpanded ? "ml-80" : "ml-20"}`}>
+          {/* Top bar with Breadcrumbs and Time - Sticky */}
+          <div className="sticky top-0 z-40 bg-slate-50 dark:bg-[#090909] px-8 py-4 mb-2 border-b border-slate-200 dark:border-slate-800">
+            <div className="flex items-center justify-between">
+              {/* Breadcrumbs only visible on lg and above (hidden on mobile/tablet) */}
+              <div className="flex-1">
+                {/* Breadcrumbs disabled: <TeacherBreadcrumbs /> */}
+              </div>
+              
+              {/* Current Time and Date - hidden on mobile */}
+              {!isMobile && isMounted && currentTime && (
+                <div className="text-sm font-medium text-slate-600 dark:text-slate-400 whitespace-nowrap ml-4">
+                  {currentTime}
+                </div>
+              )}
+            </div>
+          </div>
+          
+          <div className="px-8 pb-8">
+            {children}
+          </div>
+        </main> 
       </div>
+      
+      {/* Chatbot for authenticated teachers */}
+      <Chatbot isAuthenticated={true} />
+
+      {/* Logout Confirmation Modal */}
+      <LogoutConfirmationModal
+        isOpen={isLogoutModalOpen}
+        onClose={() => setIsLogoutModalOpen(false)}
+        onConfirm={handleLogout}
+        userName={userName}
+      />
     </div>
+  );
+}
+
+export default function TeacherLayout({ children }: TeacherLayoutProps) {
+  return (
+    <ThemeProvider>
+      <TeacherLayoutContent>{children}</TeacherLayoutContent>
+    </ThemeProvider>
   );
 }

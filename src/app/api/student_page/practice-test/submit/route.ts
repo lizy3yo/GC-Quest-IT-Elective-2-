@@ -3,6 +3,7 @@ import { PracticeTestSubmission } from '@/models/practice-test-submission';
 import { PracticeTest } from '@/models/practice-test';
 import { connectToDatabase } from '@/lib/mongoose';
 import { logger } from '@/lib/winston';
+import { logActivity } from '@/lib/activity';
 
 export const dynamic = 'force-dynamic';
 
@@ -101,6 +102,28 @@ export async function POST(req: NextRequest) {
       pointsEarned,
       totalPoints
     });
+
+    // Log activity for achievements tracking
+    try {
+      await logActivity({
+        userId,
+        type: 'practice_test.submit',
+        action: 'completed',
+        meta: {
+          practiceTestId: practiceTestId || 'temp',
+          submissionId: String(submission._id),
+          title: practiceTest?.title || 'Practice Test',
+          score,
+          pointsEarned,
+          totalPoints,
+          isPerfectScore,
+          timeSpent
+        },
+        progress: 100
+      });
+    } catch (activityErr) {
+      logger.warn('Failed to log practice test activity', { error: activityErr });
+    }
 
     return NextResponse.json({
       success: true,

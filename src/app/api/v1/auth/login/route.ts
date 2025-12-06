@@ -35,14 +35,14 @@ import Token from '@/models/token';
 import type { IUser } from '@/models/user';
 import type { Types } from 'mongoose';
 
-type UserData = Pick<IUser, 'email' | 'password'>;
+type UserData = Pick<IUser, 'email' | 'password'> & { role?: 'student' | 'instructor' };
 
 export async function POST(request: NextRequest) {
   try {
     await connectToDatabase();
 
     const body = await request.json() as UserData;
-  const { email, password } = body;
+  const { email, password, role: requestedRole } = body;
 
     // Validation
     const emailError = validateEmail(email);
@@ -71,7 +71,7 @@ export async function POST(request: NextRequest) {
 
     // Find user
     const user = await User.findOne({ email })
-      .select('username email password role firstName lastName')
+      .select('username email password role firstName lastName emailVerified')
       .lean()
       .exec() as {
         _id: Types.ObjectId;
@@ -81,6 +81,7 @@ export async function POST(request: NextRequest) {
         role: string;
         firstName: string;
         lastName: string;
+        emailVerified?: boolean;
       } | null;
 
     if (!user) {
@@ -88,6 +89,18 @@ export async function POST(request: NextRequest) {
         code: 'VALIDATION_ERROR',
         message: 'Email or password is invalid',
       }, { status: 400 });
+    }
+
+    // Verify role matches if provided
+    if (requestedRole) {
+      // Normalize: frontend sends "instructor" but DB stores "teacher"
+      const normalizedRole = requestedRole === 'instructor' ? 'teacher' : requestedRole;
+      if (user.role !== normalizedRole) {
+        return NextResponse.json({
+          code: 'VALIDATION_ERROR',
+          message: 'Invalid credentials for the selected role',
+        }, { status: 400 });
+      }
     }
 
     // Verify password
@@ -138,12 +151,13 @@ export async function POST(request: NextRequest) {
 
     const response = NextResponse.json({
       Student: {
-        _id: user._id.toString(), // Add this line
+        _id: user._id.toString(),
         username: user.username,
         email: user.email,
         role: user.role,
         firstName: user.firstName,
-        lastName: user.lastName
+        lastName: user.lastName,
+        emailVerified: user.emailVerified || false
       },
       accessToken,
     });

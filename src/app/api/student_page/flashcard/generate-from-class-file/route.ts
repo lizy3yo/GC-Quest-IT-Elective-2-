@@ -278,7 +278,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       success: true,
       flashcard: {
-        id: flashcard._id,
+        id: flashcard._id.toString(),
         title: flashcard.title,
         cardsGenerated: result.flashcards.length,
         qualityScore: result.qualityMetrics.overallScore,

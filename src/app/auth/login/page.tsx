@@ -2,28 +2,27 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import Alert from "@/components/molecules/alert_template/Alert";
-import { useAlert } from "@/hooks/useAlert";
+import { useToast } from "@/contexts/ToastContext";
 import "./login-mobile.css";
-import { signIn, useSession } from "next-auth/react";
 
 interface LoginData {
   email: string;
   password: string;
-  role: "student" | "instructor";
+  role: "student" | "parent";
 }
 
-interface User {
+interface Student {
   _id: string;
   username: string;
   email: string;
   role: string;
   firstName: string;
   lastName: string;
+  emailVerified?: boolean;
 }
 
 interface LoginResponse {
-  user: User;
+  Student: Student;
   accessToken: string;
 }
 
@@ -38,38 +37,53 @@ export default function Login() {
     password: "",
     role: "student",
   });
-  const [showForgotModal, setShowForgotModal] = useState(false);
+  const [showCoordinatorModal, setShowCoordinatorModal] = useState(false);
+  const [coordinatorEmail, setCoordinatorEmail] = useState("");
+  const [coordinatorPassword, setCoordinatorPassword] = useState("");
+  const [showCoordinatorPassword, setShowCoordinatorPassword] = useState(false);
+  const [coordinatorRole, setCoordinatorRole] = useState<"instructor" | "coordinator">("coordinator");
+  const [coordinatorRememberMe, setCoordinatorRememberMe] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(false);
-  const { alert, showError, showSuccess, hideAlert } = useAlert();
+  const { showError, showSuccess } = useToast();
   const router = useRouter();
   
-  // Load remembered instructor credentials (if any) when role switches to instructor
+  // Load remembered credentials based on selected role
   useEffect(() => {
-    try {
-      if (typeof window === "undefined") return;
-      const stored = localStorage.getItem("rememberedInstructor");
-      if (stored) {
-        const creds = JSON.parse(stored) as { email?: string; password?: string };
-        if (creds?.email || creds?.password) {
-          // only auto-fill when user selects instructor role to avoid affecting student flow
-          if (formData.role === "instructor") {
-            setFormData((prev) => ({
+    const loadCredentials = () => {
+      try {
+        const storageKey = `remembered_${formData.role}`;
+        const stored = localStorage.getItem(storageKey);
+        if (stored) {
+          const creds = JSON.parse(stored) as { email?: string; password?: string };
+          if (creds?.email && creds?.password) {
+            setFormData(prev => ({
               ...prev,
-              email: creds.email || prev.email,
-              password: creds.password || prev.password,
+              email: creds.email || "",
+              password: creds.password || ""
             }));
             setRememberMe(true);
+            return;
           }
         }
+        // Clear form when switching to a role without saved credentials
+        setFormData(prev => ({
+          ...prev,
+          email: "",
+          password: ""
+        }));
+        setRememberMe(false);
+      } catch {
+        // ignore errors
       }
-    } catch {
-      // noop
-    }
+    };
+    
+    loadCredentials();
   }, [formData.role]);
   
   // Show an error when redirected after a rejected Google sign-in (non-Gordon domain)
+  // or when session expires, or show success on logout
   useEffect(() => {
     try {
       const params = new URLSearchParams(window.location.search);
@@ -81,21 +95,76 @@ export default function Login() {
         );
         // Clear the query string to avoid repeated alerts
         router.replace(window.location.pathname);
+      } else if (reason === "session_expired") {
+        showError(
+          "Your session has expired due to inactivity. Please sign in again.",
+          "Session Expired"
+        );
+        // Clear the query string to avoid repeated alerts
+        router.replace(window.location.pathname);
+      } else if (reason === "logout") {
+        showSuccess(
+          "You have been successfully logged out.",
+          "Logged Out"
+        );
+        // Clear the query string to avoid repeated alerts
+        router.replace(window.location.pathname);
       }
     } catch (err) {
       // noop
     }
-  }, [router, showError]);
+  }, [router, showError, showSuccess]);
 
-  // close forgot-password modal on Escape
+
+
+  // Coordinator shortcut: Ctrl+Shift+C or Cmd+Shift+C
   useEffect(() => {
-    if (!showForgotModal) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setShowForgotModal(false);
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === 'C') {
+        e.preventDefault();
+        setShowCoordinatorModal(true);
+      }
+      if (showCoordinatorModal && e.key === 'Escape') {
+        setShowCoordinatorModal(false);
+        // Only clear credentials if remember me is not checked
+        if (!coordinatorRememberMe) {
+          setCoordinatorEmail("");
+          setCoordinatorPassword("");
+        }
+      }
     };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [showForgotModal]);
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [showCoordinatorModal]);
+
+  // Load remembered coordinator credentials based on selected role
+  useEffect(() => {
+    if (!showCoordinatorModal) return;
+    
+    const loadCoordinatorCredentials = () => {
+      try {
+        const storageKey = `remembered_${coordinatorRole}`;
+        const stored = localStorage.getItem(storageKey);
+        if (stored) {
+          const creds = JSON.parse(stored) as { email?: string; password?: string };
+          if (creds?.email && creds?.password) {
+            setCoordinatorEmail(creds.email);
+            setCoordinatorPassword(creds.password);
+            setCoordinatorRememberMe(true);
+            return;
+          }
+        }
+        // Clear form when switching to a role without saved credentials
+        setCoordinatorEmail("");
+        setCoordinatorPassword("");
+        setCoordinatorRememberMe(false);
+      } catch {
+        // ignore errors
+      }
+    };
+    
+    loadCoordinatorCredentials();
+  }, [showCoordinatorModal, coordinatorRole]);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
@@ -103,40 +172,20 @@ export default function Login() {
       ...prev,
       [name]: value,
     }));
-    if (alert.isVisible) hideAlert();
   };
 
-  const handleRoleChange = (role: "student" | "instructor") => {
+  const handleRoleChange = (role: "student" | "parent") => {
     setFormData((prev) => ({
       ...prev,
       role,
     }));
-    if (alert.isVisible) hideAlert();
   };
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setIsLoading(true);
-    hideAlert();
 
     try {
-      // clear any locally cached profile that conflicts with the selected role
-      prepareOAuthSignIn();
-
-      // server-side check for same-email-different-role
-      const emailToCheck = formData.email || "";
-      if (emailToCheck) {
-        const conflict = await checkRoleConflict(emailToCheck, formData.role);
-        if (conflict) {
-          showError(
-            "That email is already associated with a different role. Use a different email or sign out first.",
-            "Role conflict"
-          );
-          setIsLoading(false);
-          return;
-        }
-      }
-
       const response = await fetch("/api/v1/auth/login", {
         method: "POST",
         headers: {
@@ -155,38 +204,66 @@ export default function Login() {
 
       const loginData = data as LoginResponse;
 
-      // Store user data
-      if (loginData.user) {
-        localStorage.setItem("user", JSON.stringify(loginData.user));
-        localStorage.setItem("userId", loginData.user._id); // Add this line
+      // Check if email is verified (only for students and parents)
+      if ((formData.role === "student" || formData.role === "parent") && !loginData.Student.emailVerified) {
+        // Store user data temporarily
+        localStorage.setItem("user", JSON.stringify(loginData.Student));
+        localStorage.setItem("userId", loginData.Student._id);
         localStorage.setItem("accessToken", loginData.accessToken);
-      } else {
-        showError("Login failed: user data not found in response.", "Login Failed");
+        
+        // Automatically send verification email
+        try {
+          const verifyResponse = await fetch("/api/auth/send-verification", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({ email: loginData.Student.email }),
+          });
+
+          if (verifyResponse.ok) {
+            showSuccess("Verification code sent to your email", "Email Not Verified");
+          } else {
+            showError("Please verify your email before accessing your dashboard", "Email Not Verified");
+          }
+        } catch (err) {
+          console.error("Failed to send verification email:", err);
+          showError("Please verify your email before accessing your dashboard", "Email Not Verified");
+        }
+        
+        // Redirect to verification page
+        setTimeout(() => {
+          router.push(`/auth/verify-email?email=${encodeURIComponent(loginData.Student.email)}`);
+        }, 1500);
         return;
       }
-      // Persist instructor credentials if user opted in
-      try {
-        if (formData.role === "instructor") {
-          if (rememberMe) {
-            localStorage.setItem(
-              "rememberedInstructor",
-              JSON.stringify({ email: formData.email, password: formData.password })
-            );
-          } else {
-            localStorage.removeItem("rememberedInstructor");
-          }
-        }
-      } catch {
-        // noop
+
+      // Store user data
+      localStorage.setItem("user", JSON.stringify(loginData.Student));
+      localStorage.setItem("userId", loginData.Student._id);
+      localStorage.setItem("accessToken", loginData.accessToken);
+
+      // Save credentials if remember me is checked (role-specific storage)
+      const storageKey = `remembered_${formData.role}`;
+      if (rememberMe) {
+        localStorage.setItem(storageKey, JSON.stringify({
+          email: formData.email,
+          password: formData.password
+        }));
+      } else {
+        localStorage.removeItem(storageKey);
       }
 
       showSuccess("Login successful! Redirecting...", "Welcome back");
 
       // Navigate based on user role
       setTimeout(() => {
-        switch (loginData.user.role) {
+        switch (loginData.Student.role) {
           case "admin":
             router.push("/admin");
+            break;
+          case "coordinator":
+            router.push("/coordinator_page");
             break;
           case "teacher":
           case "instructor":
@@ -194,6 +271,9 @@ export default function Login() {
             break;
           case "student":
             router.push("/student_page/dashboard");
+            break;
+          case "parent":
+            router.push("/parent_page");
             break;
           default:
             router.push("/dashboard");
@@ -210,38 +290,75 @@ export default function Login() {
     }
   };
 
-  // call server-side check to prevent same-email different-role sign-ins
-  const checkRoleConflict = async (email: string, role: "student" | "instructor") => {
-    try {
-      const res = await fetch("/api/v1/auth/check-role", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, role }),
-      });
-      if (!res.ok) return false;
-      const json = await res.json();
-      return json.conflict === true;
-    } catch {
-      // if endpoint unavailable, allow flow (server will still enforce on callback/login)
-      return false;
-    }
-  };
 
-  // If a different-role profile is cached locally, remove it before starting OAuth
-  const prepareOAuthSignIn = () => {
+
+  // Coordinator quick login
+  const handleCoordinatorLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsLoading(true);
+
     try {
-      if (typeof window === "undefined") return;
-      const raw = localStorage.getItem("user");
-      if (!raw) return;
-      const parsed = JSON.parse(raw) as { role?: string };
-      if (parsed?.role && parsed.role !== formData.role) {
-        // remove cached profile + tokens so UI won't show previous account after OAuth round-trip
-        localStorage.removeItem("user");
-        localStorage.removeItem("accessToken");
-        localStorage.removeItem("userId");
+      const response = await fetch("/api/v1/auth/login", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          email: coordinatorEmail,
+          password: coordinatorPassword,
+          role: coordinatorRole, // Send the selected role
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        const errorData = data as ApiError;
+        showError(errorData.message || "Invalid credentials", "Login Failed");
+        return;
       }
-    } catch {
-      // noop
+
+      const loginData = data as LoginResponse;
+
+      // Store user data
+      localStorage.setItem("user", JSON.stringify(loginData.Student));
+      localStorage.setItem("userId", loginData.Student._id);
+      localStorage.setItem("accessToken", loginData.accessToken);
+
+      const roleLabel = coordinatorRole === "coordinator" ? "Coordinator" : "Instructor";
+      showSuccess(`${roleLabel} access granted! Redirecting...`, "Welcome");
+
+      // Save credentials if remember me is checked (role-specific storage)
+      const storageKey = `remembered_${coordinatorRole}`;
+      if (coordinatorRememberMe) {
+        localStorage.setItem(storageKey, JSON.stringify({
+          email: coordinatorEmail,
+          password: coordinatorPassword
+        }));
+      } else {
+        localStorage.removeItem(storageKey);
+      }
+
+      // Close modal and redirect based on role
+      setShowCoordinatorModal(false);
+      setTimeout(() => {
+        if (coordinatorRole === "coordinator") {
+          router.push("/coordinator_page");
+        } else {
+          // Ensure instructors go to the dashboard (not the base teacher_page route)
+          router.push("/teacher_page/dashboard");
+        }
+      }, 1000);
+    } catch (error) {
+      console.error("Login error:", error);
+      showError("Network error. Please try again.", "Connection Error");
+    } finally {
+      setIsLoading(false);
+      if (!coordinatorRememberMe) {
+        setCoordinatorEmail("");
+        setCoordinatorPassword("");
+        setCoordinatorRole("coordinator");
+      }
     }
   };
 
@@ -250,17 +367,6 @@ export default function Login() {
       className="h-screen w-screen flex flex-col items-center justify-center relative overflow-hidden font-[Inter,-apple-system,BlinkMacSystemFont,'Segoe_UI',sans-serif] bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-800"
       data-login-page
     >
-      <Alert
-        type={alert.type}
-        message={alert.message}
-        title={alert.title}
-        isVisible={alert.isVisible}
-        onClose={hideAlert}
-        autoClose={alert.type === "success"}
-        autoCloseDelay={3000}
-        position="bottom-right"
-      />
-
       {/* GCQuest Title - Outside Container */}
       <div className="relative z-10 mb-8 max-md:mb-6">
         <h1 className="m-0 text-center text-5xl font-extrabold bg-gradient-to-br from-green-600 via-green-500 to-green-700 dark:from-green-400 dark:via-green-500 dark:to-green-600 bg-clip-text text-transparent tracking-tight relative after:content-[''] after:absolute after:bottom-[-12px] after:left-1/2 after:transform after:translate-x-[-50%] after:w-[80px] after:h-[4px] after:bg-gradient-to-r after:from-green-600 after:to-green-500 dark:after:from-green-400 dark:after:to-green-500 after:rounded-[2px] after:opacity-60 max-md:text-[3rem] max-md:font-black max-md:bg-gradient-to-br max-md:from-green-500 max-md:to-green-600 max-md:bg-clip-text max-md:text-transparent max-md:tracking-[-0.02em] max-md:after:w-[60px] max-md:after:h-[3px] max-md:after:bottom-[-8px]">
@@ -325,92 +431,21 @@ export default function Login() {
               <button
                 type="button"
                 className={`flex-1 px-6 py-4 bg-transparent border-none text-sm font-semibold cursor-pointer transition-all duration-[400ms] ease-[cubic-bezier(0.4,0,0.2,1)] relative z-10 tracking-[-0.01em] max-md:px-4 max-md:py-3 max-md:text-sm max-md:font-semibold max-md:rounded-[10px] max-md:m-[2px] max-md:h-11 max-md:flex max-md:items-center max-md:justify-center max-md:transition-all max-md:duration-200 max-md:ease disabled:opacity-50 disabled:cursor-not-allowed ${
-                  formData.role === "instructor"
+                  formData.role === "parent"
                     ? "bg-gradient-to-br from-green-400 via-green-500 to-green-600 text-white shadow-[0_8px_20px_rgba(34,197,94,0.25),inset_0_1px_0_rgba(255,255,255,0.2)] transform scale-[1.02] max-md:bg-green-400 max-md:text-white max-md:shadow-[0_2px_8px_rgba(34,197,94,0.25)] max-md:transform-none"
                     : "text-gray-500 dark:text-gray-400 hover:bg-green-100/80 dark:hover:bg-green-800/30 hover:text-green-600 dark:hover:text-green-400 hover:translate-y-[-1px] max-md:hover:bg-gray-100 dark:max-md:hover:bg-gray-600 max-md:hover:text-gray-700 dark:max-md:hover:text-gray-300 max-md:hover:transform-none"
                 }`}
-                onClick={() => handleRoleChange("instructor")}
+                onClick={() => handleRoleChange("parent")}
                 disabled={isLoading}
               >
-                Instructor
+                Parent
               </button>
             </div>
           </div>
 
           <div className="[&>div]:mb-6 [&>div:last-child]:mb-0 [&>div]:relative max-md:[&>div]:mb-4">
-            {/* Google sign-in (student gets a large, prominent CTA; instructor keeps manual fields) */}
-            {formData.role === "student" ? (
-              <div className="mb-6 flex justify-center">
-                <button
-                  type="button"
-                  onClick={async () => {
-                    setIsLoading(true);
-                    try {
-                      // clear conflicting cached profile first so UI won't show old picture after OAuth
-                      prepareOAuthSignIn();
-                      const emailToCheck = formData.email || "";
-                      const conflict = emailToCheck ? await checkRoleConflict(emailToCheck, formData.role) : false;
-                      if (conflict) {
-                        showError("That email is already associated with a different role. Use a different email or sign out first.", "Role conflict");
-                        return;
-                      }
-                      await signIn("google", { callbackUrl: `/auth/oauth-callback?role=${formData.role}` });
-                    } finally {
-                      setIsLoading(false);
-                    }
-                  }}
-                  disabled={isLoading}
-                  className="w-full max-w-[560px] flex flex-col items-start gap-1 px-8 py-6 border border-green-200 rounded-3xl bg-white shadow-[0_20px_40px_rgba(2,6,23,0.08)] hover:shadow-[0_24px_48px_rgba(2,6,23,0.12)] text-left disabled:opacity-50 transition"
-                >
-                  <div className="flex items-center gap-4">
-                    <span className="flex items-center justify-center w-10 h-10 rounded-full bg-white">
-                      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden>
-                        <path d="M21.35 11.1H12v2.8h5.35c-.23 1.35-.9 2.5-1.92 3.3v2.74h3.1c1.82-1.67 2.87-4.15 2.87-7.04 0-.66-.06-1.3-.18-1.9z" fill="#4285F4" />
-                        <path d="M12 22c2.7 0 4.96-.9 6.62-2.45l-3.1-2.74c-.86.58-1.97.92-3.52.92-2.7 0-4.99-1.82-5.8-4.28H3.03v2.7C4.67 19.9 8.02 22 12 22z" fill="#34A853" />
-                        <path d="M6.2 13.45a6.01 6.01 0 010-3.9V6.85H3.03A10 10 0 002 12c0 1.6.36 3.12 1.03 4.5l3.14-3.05z" fill="#FBBC05" />
-                        <path d="M12 6.1c1.47 0 2.57.5 3.35.92l2.5-2.43C16.95 3.3 14.7 2 12 2 8.02 2 4.67 4.1 3.03 6.85l3.17 2.7C7.01 7.9 9.3 6.1 12 6.1z" fill="#EA4335" />
-                      </svg>
-                    </span>
-                    <div>
-                      <div className="text-lg font-semibold text-slate-900">Continue with Google</div>
-                      <div className="text-sm text-slate-500">Use your @gordoncollege.edu.ph account</div>
-                    </div>
-                  </div>
-                </button>
-              </div>
-            ) : (
-              <>
-                <div className="mb-4">
-                  <button
-                    type="button"
-                    onClick={async () => {
-                      setIsLoading(true);
-                      try {
-                        // clear conflicting cached profile first
-                        prepareOAuthSignIn();
-                        const emailToCheck = formData.email || "";
-                        const conflict = emailToCheck ? await checkRoleConflict(emailToCheck, formData.role) : false;
-                        if (conflict) {
-                          showError("That email is already associated with a different role. Use a different email or sign out first.", "Role conflict");
-                          return;
-                        }
-                        await signIn("google", { callbackUrl: `/auth/oauth-callback?role=${formData.role}` });
-                      } finally {
-                        setIsLoading(false);
-                      }
-                    }}
-                    disabled={isLoading}
-                    className="w-full flex items-center justify-center gap-3 px-6 py-3 border border-green-300 rounded-2xl bg-white hover:bg-gray-50 text-sm font-semibold disabled:opacity-50"
-                  >
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden>
-                      <path d="M21.35 11.1H12v2.8h5.35c-.23 1.35-.9 2.5-1.92 3.3v2.74h3.1c1.82-1.67 2.87-4.15 2.87-7.04 0-.66-.06-1.3-.18-1.9z" fill="#4285F4" />
-                      <path d="M12 22c2.7 0 4.96-.9 6.62-2.45l-3.1-2.74c-.86.58-1.97.92-3.52.92-2.7 0-4.99-1.82-5.8-4.28H3.03v2.7C4.67 19.9 8.02 22 12 22z" fill="#34A853" />
-                      <path d="M6.2 13.45a6.01 6.01 0 010-3.9V6.85H3.03A10 10 0 002 12c0 1.6.36 3.12 1.03 4.5l3.14-3.05z" fill="#FBBC05" />
-                      <path d="M12 6.1c1.47 0 2.57.5 3.35.92l2.5-2.43C16.95 3.3 14.7 2 12 2 8.02 2 4.67 4.1 3.03 6.85l3.17 2.7C7.01 7.9 9.3 6.1 12 6.1z" fill="#EA4335" />
-                    </svg>
-                    Sign in with Google
-                  </button>
-                </div>
+            {/* Manual login fields for all roles */}
+            <>
                 <div>
                   <label
                     htmlFor="email"
@@ -494,10 +529,9 @@ export default function Login() {
                   </div>
                 </div>
               </>
-            )}
           </div>
-          {/* only show manual submit for instructor */}
-          {formData.role === "instructor" && (
+          {/* Show manual submit for all roles */}
+          {(formData.role === "student" || formData.role === "parent") && (
            <div>
              <div className="flex items-center gap-3 mb-4">
                <label className="inline-flex items-center cursor-pointer text-sm select-none">
@@ -530,7 +564,7 @@ export default function Login() {
           <div className="text-center mt-4 max-md:mt-6">
             <button
               type="button"
-              onClick={() => setShowForgotModal(true)}
+              onClick={() => router.push("/auth/forgot-password")}
               className="text-green-600 dark:text-green-400 no-underline font-semibold text-[0.9rem] transition-all duration-300 ease relative tracking-[-0.01em] after:content-[''] after:absolute after:w-0 after:h-[2px] after:bottom-[-2px] after:left-1/2 after:bg-gradient-to-r after:from-green-600 after:to-green-500 dark:after:from-green-400 dark:after:to-green-500 after:transition-all after:duration-300 after:ease after:transform after:translate-x-[-50%] hover:text-green-700 dark:hover:text-green-300 hover:translate-y-[-1px] hover:after:w-full max-md:text-green-400 max-md:no-underline max-md:font-semibold max-md:text-sm max-md:transition-[color] max-md:duration-200 max-md:ease max-md:after:hidden max-md:hover:text-green-500 dark:max-md:hover:text-green-300 max-md:hover:transform-none"
             >
               Forgot password?
@@ -539,67 +573,265 @@ export default function Login() {
         </form>
       </div>
 
-      {/* Forgot password modal */}
-      {showForgotModal && (
-            <div
-              role="dialog"
-              aria-modal="true"
-              className="fixed inset-0 z-50 flex items-center justify-center px-4"
-            >
-              <div
-                onClick={() => setShowForgotModal(false)}
-                className="absolute inset-0 bg-black/60 backdrop-blur-sm"
-              />
-              <div className="relative z-10 max-w-3xl w-full bg-white dark:bg-gray-900 rounded-lg shadow-2xl overflow-hidden border border-gray-200 dark:border-gray-700">
-                <div className="flex items-start justify-between p-6 border-b border-gray-100 dark:border-gray-800">
-                  <div className="flex items-center gap-3">
-                    <div className="p-2 rounded-md bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-300">
-                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden>
-                        <path d="M9 12h6M12 9v6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-                      </svg>
+      {/* Coordinator Quick Login Modal */}
+          {showCoordinatorModal && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm animate-fadeIn">
+              <div className="relative w-full max-w-md mx-4 bg-white dark:bg-gray-800 rounded-2xl shadow-2xl border border-green-500/20 dark:border-green-400/30 animate-slideUp">
+                {/* Header */}
+                <div className="p-6 border-b border-gray-100 dark:border-gray-700">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-full bg-gradient-to-br from-green-400 to-green-600 flex items-center justify-center">
+                        <svg
+                          width="20"
+                          height="20"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="white"
+                          strokeWidth="2"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        >
+                          <path d="M12 2L2 7l10 5 10-5-10-5z" />
+                          <path d="M2 17l10 5 10-5" />
+                          <path d="M2 12l10 5 10-5" />
+                        </svg>
+                      </div>
+                      <div>
+                        <h3 className="text-lg font-bold text-gray-900 dark:text-white">
+                          {coordinatorRole === "instructor" ? "Instructor Access" : "Coordinator Access"}
+                        </h3>
+                        <p className="text-xs text-gray-500 dark:text-gray-400">
+                          {coordinatorRole === "instructor" ? "Quick login for instructors" : "Quick login for coordinators"}
+                        </p>
+                      </div>
                     </div>
-                    <h3 className="text-lg font-semibold text-slate-900 dark:text-gray-100">Instruction</h3>
+                    <button
+                      onClick={() => {
+                        setShowCoordinatorModal(false);
+                        // Only clear credentials if remember me is not checked
+                        if (!coordinatorRememberMe) {
+                          setCoordinatorEmail("");
+                          setCoordinatorPassword("");
+                        }
+                      }}
+                      className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                      disabled={isLoading}
+                    >
+                      <svg
+                        width="20"
+                        height="20"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        className="text-gray-500 dark:text-gray-400"
+                      >
+                        <line x1="18" y1="6" x2="6" y2="18" />
+                        <line x1="6" y1="6" x2="18" y2="18" />
+                      </svg>
+                    </button>
                   </div>
-                  <button
-                    type="button"
-                    aria-label="Close"
-                    onClick={() => setShowForgotModal(false)}
-                    className="text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 transition"
-                  >
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <line x1="18" y1="6" x2="6" y2="18"></line>
-                      <line x1="6" y1="6" x2="18" y2="18"></line>
-                    </svg>
-                  </button>
                 </div>
-                <div className="p-6 text-sm text-slate-700 dark:text-gray-300 leading-6">
-                  <p className="mb-4">
-                    For password reset requests and other reports for both GC Systems and Google Workspace account, kindly send an email to
-                    <a className="ml-1 font-semibold text-blue-600 dark:text-blue-400" href="mailto:webadmin@gordoncollege.edu.ph">webadmin@gordoncollege.edu.ph</a>
-                    using your domain email account or your registered alternate email account (personal) with the following format:
-                  </p>
-                  <div className="bg-gray-50 dark:bg-gray-800 p-4 rounded-lg border border-gray-100 dark:border-gray-700 mb-4">
-                    <p className="font-semibold text-slate-900 dark:text-gray-100">Subject:</p>
-                    <p className="text-red-600 font-semibold">Password RESET Request for [GCES/GC LAMP/Google Account] (or the issue that you want to resolve)</p>
-                    <ul className="mt-3 space-y-2">
-                      <li><span className="font-semibold">Student Number:</span> [your student number]</li>
-                      <li><span className="font-semibold">Student's Name (LN, FN MI):</span> [lastname, firstname, middle initial]</li>
-                      <li><span className="font-semibold">Reason:</span> [state your reason here]</li>
-                    </ul>
-                    <p className="mt-3 text-xs text-slate-500 dark:text-gray-400">Note: Attach a clear and verifiable screenshot/s of the reported issue.</p>
+
+                {/* Body */}
+                <form onSubmit={handleCoordinatorLogin} className="p-6">
+                  <div className="mb-6">
+                    <div className="flex items-center gap-2 mb-4 p-3 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg">
+                      <svg
+                        width="16"
+                        height="16"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        className="text-green-600 dark:text-green-400 flex-shrink-0"
+                      >
+                        <circle cx="12" cy="12" r="10" />
+                        <line x1="12" y1="16" x2="12" y2="12" />
+                        <line x1="12" y1="8" x2="12.01" y2="8" />
+                      </svg>
+                      <p className="text-xs text-green-700 dark:text-green-300">
+                        Shortcut: <kbd className="px-1.5 py-0.5 bg-white dark:bg-gray-700 border border-green-300 dark:border-green-600 rounded text-xs font-mono">Ctrl+Shift+C</kbd>
+                      </p>
+                    </div>
+
+                    {/* Role Selector */}
+                    <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+                      Select Role
+                    </label>
+                    <div className="flex gap-2 mb-4">
+                      <button
+                        type="button"
+                        onClick={() => setCoordinatorRole("instructor")}
+                        disabled={isLoading}
+                        className={`flex-1 px-4 py-2 rounded-lg text-sm font-semibold transition-all ${
+                          coordinatorRole === "instructor"
+                            ? "bg-green-500 text-white shadow-md"
+                            : "bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600"
+                        }`}
+                      >
+                        Instructor
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setCoordinatorRole("coordinator")}
+                        disabled={isLoading}
+                        className={`flex-1 px-4 py-2 rounded-lg text-sm font-semibold transition-all ${
+                          coordinatorRole === "coordinator"
+                            ? "bg-green-500 text-white shadow-md"
+                            : "bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600"
+                        }`}
+                      >
+                        Coordinator
+                      </button>
+                    </div>
+
+                    <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+                      Email
+                    </label>
+                    <input
+                      type="email"
+                      value={coordinatorEmail}
+                      onChange={(e) => setCoordinatorEmail(e.target.value)}
+                      placeholder="Enter coordinator email"
+                      required
+                      disabled={isLoading}
+                      className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:border-green-500 dark:focus:border-green-400 focus:ring-2 focus:ring-green-500/20 dark:focus:ring-green-400/20 outline-none transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                    />
                   </div>
-                  <p>
-                    Once verified, you will receive an email that contains the new account credentials. Only those emails that used the GC domain account or the registered alternate email account (personal email account that you registered using GCES) will be processed online. Otherwise, proceed to the MIS office (3rd floor, Rm. 302) to process your request.
-                  </p>
-                </div>
-                <div className="flex justify-end gap-3 p-4 border-t border-gray-100 dark:border-gray-800">
+
+                  <div className="mb-6">
+                    <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+                      Password
+                    </label>
+                    <div className="relative">
+                      <input
+                        type={showCoordinatorPassword ? "text" : "password"}
+                        value={coordinatorPassword}
+                        onChange={(e) => setCoordinatorPassword(e.target.value)}
+                        placeholder="Enter coordinator password"
+                        autoFocus
+                        required
+                        disabled={isLoading}
+                        className="w-full px-4 py-3 pr-12 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:border-green-500 dark:focus:border-green-400 focus:ring-2 focus:ring-green-500/20 dark:focus:ring-green-400/20 outline-none transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowCoordinatorPassword(!showCoordinatorPassword)}
+                        className="absolute right-3 top-1/2 transform -translate-y-1/2 p-2 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
+                        disabled={isLoading}
+                        tabIndex={-1}
+                      >
+                        {showCoordinatorPassword ? (
+                          <svg
+                            width="20"
+                            height="20"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="2"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                          >
+                            <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24" />
+                            <line x1="1" y1="1" x2="23" y2="23" />
+                          </svg>
+                        ) : (
+                          <svg
+                            width="20"
+                            height="20"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="2"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                          >
+                            <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+                            <circle cx="12" cy="12" r="3" />
+                          </svg>
+                        )}
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Remember Me */}
+                  <div className="mb-4">
+                    <label className="inline-flex items-center cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={coordinatorRememberMe}
+                        onChange={(e) => setCoordinatorRememberMe(e.target.checked)}
+                        disabled={isLoading}
+                        className="w-4 h-4 text-green-600 bg-gray-100 border-gray-300 rounded focus:ring-green-500 dark:focus:ring-green-600 dark:ring-offset-gray-800 focus:ring-2 dark:bg-gray-700 dark:border-gray-600"
+                      />
+                      <span className="ml-2 text-sm text-gray-700 dark:text-gray-300">
+                        Remember me
+                      </span>
+                    </label>
+                  </div>
+
                   <button
-                    type="button"
-                    onClick={() => setShowForgotModal(false)}
-                    className="px-4 py-2 rounded-md bg-gray-100 dark:bg-gray-800 text-sm font-semibold text-slate-700 dark:text-gray-200 hover:bg-gray-200 dark:hover:bg-gray-700"
+                    type="submit"
+                    disabled={isLoading || !coordinatorEmail || !coordinatorPassword}
+                    className="w-full px-6 py-3 bg-gradient-to-br from-green-400 via-green-500 to-green-600 text-white rounded-lg font-semibold shadow-lg hover:shadow-xl hover:translate-y-[-2px] transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none flex items-center justify-center gap-2"
                   >
-                    Close
+                    {isLoading ? (
+                      <>
+                        <svg
+                          className="animate-spin h-5 w-5"
+                          xmlns="http://www.w3.org/2000/svg"
+                          fill="none"
+                          viewBox="0 0 24 24"
+                        >
+                          <circle
+                            className="opacity-25"
+                            cx="12"
+                            cy="12"
+                            r="10"
+                            stroke="currentColor"
+                            strokeWidth="4"
+                          />
+                          <path
+                            className="opacity-75"
+                            fill="currentColor"
+                            d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                          />
+                        </svg>
+                        Signing in...
+                      </>
+                    ) : (
+                      <>
+                        <svg
+                          width="20"
+                          height="20"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="2"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        >
+                          <path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4" />
+                          <polyline points="10 17 15 12 10 7" />
+                          <line x1="15" y1="12" x2="3" y2="12" />
+                        </svg>
+                        {coordinatorRole === "instructor" ? "Access Instructor" : "Access Coordinator"}
+                      </>
+                    )}
                   </button>
+                </form>
+
+                {/* Footer */}
+                <div className="px-6 pb-6">
+                  <p className="text-xs text-center text-gray-500 dark:text-gray-400">
+                    This is a secure {coordinatorRole} access point
+                  </p>
                 </div>
               </div>
             </div>

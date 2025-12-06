@@ -21,6 +21,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { connectToDatabase } from '@/lib/mongoose';
 import Class from '@/models/class';
 import User from '@/models/user';
+import { cache, cacheKeys, CACHE_TTL, cacheTags } from '@/lib/cache';
 
 //MIDDLEWARE
 import { authenticate } from '@/lib/middleware/authenticate';
@@ -44,12 +45,23 @@ export async function GET(request: NextRequest) {
       return authzResult as Response;
     }
 
-    await connectToDatabase();
-
     const { searchParams } = new URL(request.url);
     const isActive = searchParams.get('active'); // 'true', 'false'
     const limit = parseInt(searchParams.get('limit') || '50');
     const page = parseInt(searchParams.get('page') || '1');
+
+    // Check cache first
+    const cacheKey = `v1:${cacheKeys.userClasses(authResult.userId.toString())}:${isActive}:${page}:${limit}`;
+    const cachedData = cache.get<any>(cacheKey);
+    if (cachedData) {
+      return NextResponse.json({
+        success: true,
+        data: cachedData,
+        cached: true
+      });
+    }
+
+    await connectToDatabase();
 
     // Build query to find classes where this student is enrolled
     const query: any = {
@@ -72,20 +84,25 @@ export async function GET(request: NextRequest) {
       query.$and.push({ isActive: true });
     }
 
-    // Get classes with pagination
-    const skip = (page - 1) * limit;
-    const classes = await Class.find(query)
-      .sort({ createdAt: -1 })
-      .skip(skip)
-      .limit(limit)
-      .lean();
+    // Get classes with pagination (optimized)
+    const { paginatedQuery, batchFindByIds } = await import('@/lib/db-optimization');
+    const result = await paginatedQuery(Class, query, {
+      page,
+      limit,
+      sort: { createdAt: -1 },
+      select: '_id name subject courseYear description teacherId students isActive createdAt'
+    });
+
+    // Get all teacher IDs and fetch in batch
+    const teacherIds = [...new Set(result.data.map((c: any) => c.teacherId))];
+    const teachers = await batchFindByIds(User, teacherIds, {
+      select: 'firstName lastName'
+    });
+    const teacherMap = new Map(teachers.map((t: any) => [t._id.toString(), t]));
 
     // Get teacher information for each class
-    const classesWithTeacher = await Promise.all(
-      classes.map(async (classItem) => {
-        const teacher = await User.findById(classItem.teacherId)
-          .select('firstName lastName')
-          .lean() as { firstName?: string; lastName?: string } | null;
+    const classesWithTeacher = result.data.map((classItem: any) => {
+        const teacher = teacherMap.get(classItem.teacherId?.toString());
         
         const activeStudentCount = classItem.students?.filter(
           (s: any) => s.status === 'active'
@@ -105,23 +122,23 @@ export async function GET(request: NextRequest) {
           time: classItem.time,
           room: classItem.room
         };
-      })
-    );
+      });
 
-    // Get total count for pagination
-    const total = await Class.countDocuments(query);
+    const responseData = {
+      classes: classesWithTeacher,
+      pagination: result.pagination
+    };
+
+    // Cache for 5 minutes
+    cache.set(cacheKey, responseData, {
+      ttl: CACHE_TTL.MEDIUM,
+      tags: [cacheTags.user(authResult.userId.toString())]
+    });
 
     return NextResponse.json({
       success: true,
-      data: {
-        classes: classesWithTeacher,
-        pagination: {
-          current: page,
-          total: Math.ceil(total / limit),
-          count: classesWithTeacher.length,
-          totalItems: total
-        }
-      }
+      data: responseData,
+      cached: false
     });
 
   } catch (error) {
@@ -193,6 +210,10 @@ export async function POST(request: NextRequest) {
     try {
       classDoc.addStudent(authResult.userId.toString());
       await classDoc.save();
+
+      // Invalidate user's class cache
+      cache.invalidateByTag(cacheTags.user(authResult.userId.toString()));
+      cache.invalidateByTag(cacheTags.class(classDoc._id.toString()));
 
       // Get teacher info for response
       const teacher = await User.findById(classDoc.teacherId)

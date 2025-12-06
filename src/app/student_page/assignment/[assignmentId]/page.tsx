@@ -120,16 +120,25 @@ export default function StudentAssignmentPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-slate-50 dark:bg-slate-900 p-6 flex items-center justify-center">
-        <div className="text-slate-600 dark:text-slate-300">Loading assignment...</div>
+      <div className="min-h-screen bg-slate-50 dark:bg-slate-900 px-4 sm:px-6 flex items-center justify-center">
+        <div className="text-slate-600 dark:text-slate-300 text-sm sm:text-base">Loading assignment...</div>
       </div>
     );
   }
 
   if (!assignment) {
     return (
-      <div className="min-h-screen bg-slate-50 dark:bg-slate-900 p-6 flex items-center justify-center">
-        <div className="text-slate-600 dark:text-slate-300">Assignment not found.</div>
+      <div className="min-h-screen bg-slate-50 dark:bg-slate-900 px-4 sm:px-6 flex items-center justify-center">
+        <div className="max-w-md w-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-4 sm:p-6 text-center">
+          <h2 className="text-base sm:text-lg font-semibold text-slate-900 dark:text-slate-100 mb-2">Assignment not found</h2>
+          <p className="text-sm sm:text-base text-slate-600 dark:text-slate-400 mb-4">The assignment you are looking for may have been removed or is unavailable.</p>
+          <button
+            onClick={() => router.back()}
+            className="inline-flex items-center justify-center w-full sm:w-auto px-4 py-2.5 rounded-lg bg-slate-900 text-white text-sm sm:text-base font-medium hover:bg-slate-800"
+          >
+            Go back
+          </button>
+        </div>
       </div>
     );
   }
@@ -164,22 +173,22 @@ export default function StudentAssignmentPage() {
     <div className="min-h-screen bg-slate-50 dark:bg-slate-900">
       {/* Header */}
       <div className="bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 shadow-sm">
-        <div className="max-w-5xl mx-auto px-6 py-4">
-          <div className="flex items-center gap-4">
-            <button 
+        <div className="max-w-5xl mx-auto px-4 sm:px-6 py-3 sm:py-4">
+          <div className="flex items-center gap-3 sm:gap-4 flex-wrap">
+            <button
               onClick={() => router.back()}
-              className="flex items-center gap-2 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200"
+              className="flex items-center gap-1.5 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 text-sm"
             >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg className="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
               </svg>
-              Back
+              <span>Back</span>
             </button>
-            <div className="flex-1">
-              <h1 className="text-xl font-semibold text-slate-900 dark:text-slate-100">
+            <div className="flex-1 min-w-0">
+              <h1 className="text-lg sm:text-xl font-semibold text-slate-900 dark:text-slate-100 truncate">
                 {assignment.title}
               </h1>
-              <div className="text-sm text-slate-500 dark:text-slate-400 mt-1">
+              <div className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 mt-1">
                 <span className="font-medium">Instructor:</span> {assignment.instructor}
               </div>
             </div>
@@ -187,19 +196,20 @@ export default function StudentAssignmentPage() {
         </div>
       </div>
 
-      <div className="max-w-5xl mx-auto px-6 py-8">
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+      <div className="max-w-5xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 lg:gap-8">
           {/* Assignment Details */}
           <div className="lg:col-span-2 space-y-6">
             {/* Assignment Info */}
-            <div className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 p-6">
-              <div className="flex items-start justify-between mb-4">
+            <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-4 sm:p-6">
+              <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 sm:gap-4 mb-4">
                 <div>
-                  <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">
+                  <h2 className="text-base sm:text-lg font-semibold text-slate-900 dark:text-slate-100">
                     {assignment.title}
                   </h2>
-                  <div className="flex items-center gap-4 mt-2 text-sm text-slate-500 dark:text-slate-400">
+                  <div className="flex flex-wrap items-center gap-2 sm:gap-4 mt-2 text-xs sm:text-sm text-slate-500 dark:text-slate-400">
                     <span><strong>Date Posted:</strong> {assignment.datePosted}</span>
+                    <span className="hidden sm:inline">•</span>
                     <span><strong>Due date:</strong> {assignment.dueDate}</span>
                   </div>
                 </div>
@@ -211,18 +221,18 @@ export default function StudentAssignmentPage() {
               <div className="space-y-4">
                 <div>
                   <h3 className="text-sm font-medium text-slate-900 dark:text-slate-100 mb-2">Description</h3>
-                  <p className="text-slate-600 dark:text-slate-300">{assignment.description}</p>
+                  <p className="text-sm sm:text-base text-slate-600 dark:text-slate-300 whitespace-pre-wrap break-words">{assignment.description}</p>
                 </div>
 
                 {assignment.folder && assignment.filename && (
-                  <div className="bg-slate-50 dark:bg-slate-900 rounded-lg p-4">
-                    <div className="text-sm">
+                  <div className="bg-slate-50 dark:bg-slate-900 rounded-lg p-3 sm:p-4">
+                    <div className="text-xs sm:text-sm">
                       <span className="font-medium text-slate-700 dark:text-slate-300">Folder:</span> {assignment.folder}
                     </div>
-                    <div className="text-sm mt-1">
+                    <div className="text-xs sm:text-sm mt-1">
                       <span className="font-medium text-slate-700 dark:text-slate-300">Filename:</span> {assignment.filename}
                     </div>
-                    <div className="text-xs text-slate-500 dark:text-slate-400 mt-2">
+                    <div className="text-[11px] sm:text-xs text-slate-500 dark:text-slate-400 mt-2 break-all">
                       https://DOST3NAS.quickconnect.to/d/s/154IIVRbaDYf8tcn7Fy2lnhhV7kFCJWs/ki29rEM0U0tRBykbpNkRCyaA6KYvUQ-ErOAyZPmQw
                     </div>
                   </div>

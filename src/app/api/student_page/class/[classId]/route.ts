@@ -22,6 +22,7 @@ import { connectToDatabase } from '@/lib/mongoose';
 import Class from '@/models/class';
 import User from '@/models/user';
 import Assessment from '@/models/assessment';
+import { cache, CACHE_TTL, cacheTags } from '@/lib/cache';
 
 //MIDDLEWARE
 import { authenticate } from '@/lib/middleware/authenticate';
@@ -33,8 +34,9 @@ import { authorize } from '@/lib/middleware/authorize';
  */
 export async function GET(
   request: NextRequest,
-  { params }: { params: Promise<{ classId: string }> }
+  context: any
 ) {
+  const params = await context.params;
   try {
     // Authenticate the user
     const authResult = await authenticate(request);
@@ -53,6 +55,17 @@ export async function GET(
     const { classId } = await params;
     const { searchParams } = new URL(request.url);
     const includeDetails = searchParams.get('details') === 'true';
+
+    // Check cache first
+    const cacheKey = `student:class:${classId}:${authResult.userId}:${includeDetails}`;
+    const cachedData = cache.get<any>(cacheKey);
+    if (cachedData) {
+      return NextResponse.json({
+        success: true,
+        data: cachedData,
+        cached: true
+      });
+    }
 
     // Find the class and check if student is enrolled
     const classDoc = await Class.findById(classId)
@@ -192,22 +205,25 @@ export async function GET(
     };
 
     if (!includeDetails) {
+      // Cache basic class info for 5 minutes
+      cache.set(cacheKey, { class: classDetails }, {
+        ttl: CACHE_TTL.MEDIUM,
+        tags: [cacheTags.class(classId), cacheTags.user(authResult.userId.toString())]
+      });
+
       return NextResponse.json({
         success: true,
-        data: { class: classDetails }
+        data: { class: classDetails },
+        cached: false
       });
     }
 
-    // Get assessments for this class
+    // Only show published assessments to students
     const assessments = await Assessment.find({ 
       classId: classId,
-      // Only show published assessments to students, or those with due dates
-      $or: [
-        { published: true },
-        { dueDate: { $exists: true } }
-      ]
+      published: true
     })
-    .select('title type category format dueDate points description instructions published accessCode createdAt')
+    .select('title type category format dueDate points description instructions published accessCode createdAt scheduledOpen scheduledClose totalPoints')
     .sort({ createdAt: -1 })
     .lean();
 
@@ -248,6 +264,8 @@ export async function GET(
         published: assessment.published || false,
         accessCode: assessment.accessCode || '',
         category: assessment.category || 'Activity',
+        scheduledOpen: assessment.scheduledOpen ? new Date(assessment.scheduledOpen).toISOString() : undefined,
+        scheduledClose: assessment.scheduledClose ? new Date(assessment.scheduledClose).toISOString() : undefined,
         submission: submissionInfo
       };
     }));
@@ -304,9 +322,16 @@ export async function GET(
       assessments: studentAssessments
     };
 
+    // Cache detailed class info for 2 minutes (shorter TTL since it includes submission data)
+    cache.set(cacheKey, { class: detailedClassInfo }, {
+      ttl: CACHE_TTL.SHORT * 4, // 2 minutes
+      tags: [cacheTags.class(classId), cacheTags.user(authResult.userId.toString())]
+    });
+
     return NextResponse.json({
       success: true,
-      data: { class: detailedClassInfo }
+      data: { class: detailedClassInfo },
+      cached: false
     });
 
   } catch (error) {

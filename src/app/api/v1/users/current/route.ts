@@ -89,7 +89,7 @@ export async function PUT(request: NextRequest) {
         }
 
         const body = await request.json();
-        const { username, email, password, firstName, lastName } = body;
+        const { username, email, password, firstName, lastName, profileImage } = body;
 
         // Validation
         if (username) {
@@ -166,6 +166,7 @@ export async function PUT(request: NextRequest) {
         if (email) updateData.email = email;
         if (firstName) updateData.firstName = firstName;
         if (lastName) updateData.lastName = lastName;
+        if (profileImage !== undefined) updateData.profileImage = profileImage;
         if (password) {
             updateData.password = await bcrypt.hash(password, 10);
         }

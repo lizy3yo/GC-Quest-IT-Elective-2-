@@ -9,10 +9,8 @@ import { authorize } from '@/lib/middleware/authorize';
  * PUT /api/teacher_page/assessment/[id]/student/[studentId]/question-grade
  * Grade an individual question for a student's submission
  */
-export async function PUT(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string; studentId: string }> }
-) {
+export async function PUT(request: NextRequest, context: any) {
+  const params = await context.params;
   try {
     // Authenticate the user
     const authResult = await authenticate(request);
@@ -106,9 +104,9 @@ export async function PUT(
     // Recalculate total score
     const totalPoints = submission.gradedAnswers.reduce((sum: number, ga: any) => sum + ga.points, 0);
     const totalMaxPoints = submission.gradedAnswers.reduce((sum: number, ga: any) => sum + ga.maxPoints, 0);
-    const newPercentageScore = totalMaxPoints > 0 ? (totalPoints / totalMaxPoints) * 100 : 0;
 
-    submission.score = Math.round(newPercentageScore * 100) / 100;
+    submission.score = Math.round(totalPoints * 100) / 100; // Use actual score, not percentage
+    submission.maxScore = totalMaxPoints; // Update maxScore as well
 
     // Check if all manual grading questions have been graded
     const needsManualGrading = submission.gradedAnswers.some(

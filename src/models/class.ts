@@ -133,6 +133,8 @@ export interface IClass extends Document {
   // Metadata
   createdAt: Date;
   updatedAt: Date;
+  archived?: boolean;
+  archivedAt?: Date;
   
   // Methods
   addPost(authorId: string, authorName: string, body: string, pinned?: boolean, authorAvatar?: string): IPost;
@@ -415,10 +417,10 @@ const classSchema = new Schema<IClass>({
   },
   classCode: { 
     type: String, 
-    required: [true, 'Join code is required'],
+    required: [true, 'Class code is required'],
     unique: true,
-    maxLength: [20, 'Join code must be less than 20 characters'],
-    match: [/^[A-Z0-9]{6,12}$/, 'Join code must be 6-12 uppercase alphanumeric characters']
+    maxLength: [50, 'Class code must be less than 50 characters'],
+    trim: true
   },
   isActive: { 
     type: Boolean, 
@@ -468,16 +470,29 @@ const classSchema = new Schema<IClass>({
       type: Boolean, 
       default: true 
     }
+  },
+  
+  archived: {
+    type: Boolean,
+    default: false
+  },
+  archivedAt: {
+    type: Date
   }
 }, {
   timestamps: true
 });
 
 // Indexes for better query performance
-classSchema.index({ teacherId: 1, isActive: 1 });
+classSchema.index({ teacherId: 1, isActive: 1 }); // For teacher's active classes
+classSchema.index({ teacherId: 1, archived: 1 }); // For archived classes
 // Note: classCode index is created automatically by unique: true in field definition
-classSchema.index({ 'students.studentId': 1 });
-classSchema.index({ createdAt: -1 });
+classSchema.index({ 'students.studentId': 1 }); // For student enrollment lookups
+classSchema.index({ 'students.studentId': 1, 'students.status': 1 }); // For active enrollments
+classSchema.index({ createdAt: -1 }); // For sorting by creation date
+classSchema.index({ subject: 1 }); // For filtering by subject
+classSchema.index({ courseYear: 1 }); // For filtering by course year
+classSchema.index({ isActive: 1, teacherId: 1, createdAt: -1 }); // Compound for teacher dashboard
 
 // Virtual for student count
 classSchema.virtual('studentCount').get(function() {

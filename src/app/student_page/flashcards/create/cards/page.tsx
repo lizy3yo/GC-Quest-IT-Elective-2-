@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import PrimaryActionButton from "@/components/atoms/buttons/PrimaryActionButton";
+import PrimaryActionButton from "@/components/molecules/buttons/buttons/PrimaryActionButton";
 
 interface CardItem {
   question: string;
@@ -16,7 +16,7 @@ export default function FlashcardsCreateCardsPage() {
   // Step 1 values (read-only here)
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
-  const [category, setCategory] = useState("");
+  const [subject, setSubject] = useState("");
   const [isPublic, setIsPublic] = useState(false);
 
   // Step 2 (cards)
@@ -38,10 +38,17 @@ export default function FlashcardsCreateCardsPage() {
         router.replace("/student_page/flashcards/create/set");
         return;
       }
+      
+      // Debug: Log what we got from localStorage
+      console.log('Loaded from localStorage:', data);
+      console.log('Subject from draft:', data.subject);
+      
       setTitle(data.title || "");
       setDescription(data.description || "");
-      setCategory(data.category || "");
+      setSubject(data.subject || "");
       setIsPublic(!!data.isPublic);
+      
+      console.log('Subject state set to:', data.subject || "");
 
       if (Array.isArray(data.cards) && data.cards.length >= 2) {
         setCards(
@@ -90,6 +97,11 @@ export default function FlashcardsCreateCardsPage() {
       router.replace("/student_page/flashcards/create/set");
       return;
     }
+    if (!subject.trim()) {
+      alert('Please go back and select a subject/class for your flashcard set');
+      router.replace("/student_page/flashcards/create/set");
+      return;
+    }
     if (validCards.length < 2) return;
 
     setLoading(true);
@@ -99,13 +111,32 @@ export default function FlashcardsCreateCardsPage() {
       if (!userId || !token) throw new Error("You are not authenticated. Please login again.");
 
       const normalizedDescription = (description || "").trim();
+      
+      // Debug: Log the subject before creating
+      console.log('Creating flashcard with subject:', subject);
+      console.log('Subject type:', typeof subject);
+      console.log('Subject length:', subject?.length);
+      
+      // Validate and prepare subject
+      const trimmedSubject = subject && typeof subject === 'string' ? subject.trim() : '';
+      if (!trimmedSubject) {
+        console.error('❌ ERROR: Subject is empty!');
+        console.error('subject value:', subject);
+        console.error('subject type:', typeof subject);
+        alert('Subject/Class is required. Please go back and select a class.');
+        return;
+      }
+
       const payload = {
         title: title.trim(),
         description: normalizedDescription.length ? normalizedDescription : undefined,
         cards: validCards.map((c) => ({ question: c.question.trim(), answer: c.answer.trim() })),
         accessType: isPublic ? "public" : "private",
-        tags: [...(category ? [category] : [])],
+        subject: trimmedSubject, // Use validated subject
+        tags: [],
       };
+
+      console.log('✅ Payload being sent:', JSON.stringify(payload, null, 2));
 
       const res = await fetch(`/api/student_page/flashcard?userId=${encodeURIComponent(userId)}`, {
         method: "POST",
@@ -121,10 +152,22 @@ export default function FlashcardsCreateCardsPage() {
         throw new Error(err?.message || `Failed to create flashcard set (status ${res.status})`);
       }
 
+      const responseData = await res.json();
+      console.log('API Response:', responseData);
+      console.log('Created flashcard subject:', responseData.flashcard?.subject);
+
       // clear draft after successful creation
       try { localStorage.removeItem("flashcards:create:draft"); } catch {}
 
-      router.push(isPublic ? "/student_page/public_library" : "/student_page/private_library");
+      // Redirect to library with subject parameter to auto-expand the folder
+      const redirectSubject = responseData.flashcard?.subject || subject;
+      if (isPublic) {
+        router.push("/student_page/public_library");
+      } else {
+        // Add subject as query parameter to auto-expand the folder
+        const subjectParam = redirectSubject ? `?subject=${encodeURIComponent(redirectSubject)}` : '';
+        router.push(`/student_page/private_library${subjectParam}`);
+      }
     } catch (e) {
       console.error(e);
       alert("Failed to create deck. Please try again.");
@@ -151,7 +194,7 @@ export default function FlashcardsCreateCardsPage() {
 
           <div className="mt-4 text-slate-500 dark:text-slate-400 text-sm">
             <span className="font-medium text-slate-700 dark:text-slate-300">Set:</span> {title}
-            {category ? <span className="ml-2">• {category}</span> : null}
+            {subject ? <span className="ml-2">• {subject}</span> : null}
             {isPublic ? <span className="ml-2">• Public</span> : <span className="ml-2">• Private</span>}
           </div>
         </div>

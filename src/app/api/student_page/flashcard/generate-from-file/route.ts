@@ -42,6 +42,7 @@ export async function POST(request: NextRequest) {
     const folderId = formData.get('folderId') as string;
     const tagsString = formData.get('tags') as string;
     const maxCards = parseInt((formData.get('maxCards') as string) || '20');
+    const isPublic = formData.get('isPublic') === 'true';
     const tags = tagsString ? tagsString.split(',').map(tag => tag.trim()) : [];
 
     if (!file) {
@@ -245,7 +246,7 @@ export async function POST(request: NextRequest) {
         result.analysis.strategy,
         ...result.analysis.keyTopics.map((topic: string) => topic.toLowerCase())
       ],
-      accessType: 'private' as const,
+      accessType: isPublic ? 'public' as const : 'private' as const,
 
       // Enhanced metadata
       aiMetadata: {

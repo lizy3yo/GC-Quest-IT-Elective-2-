@@ -26,6 +26,8 @@ const config: Config = {
         'spin': 'spin 1s linear infinite',
         'in': 'slideIn 0.2s ease-out',
         'slide-in-from-top-2': 'slideInFromTop 0.2s ease-out',
+        'popover-in': 'popoverIn 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275)',
+        'popover-out': 'popoverOut 0.2s cubic-bezier(0.4, 0, 0.6, 1)',
       },
       keyframes: {
         pulse: {
@@ -74,6 +76,29 @@ const config: Config = {
             transform: 'translateY(0)',
           },
         },
+        popoverIn: {
+          '0%': {
+            opacity: '0',
+            transform: 'translateY(12px) scale(0.9)',
+          },
+          '50%': {
+            transform: 'translateY(-2px) scale(1.02)',
+          },
+          '100%': {
+            opacity: '1',
+            transform: 'translateY(0) scale(1)',
+          },
+        },
+        popoverOut: {
+          '0%': {
+            opacity: '1',
+            transform: 'translateY(0) scale(1)',
+          },
+          '100%': {
+            opacity: '0',
+            transform: 'translateY(10px) scale(0.92)',
+          },
+        },
       },
       screens: {
         'max-md': { 'max': '768px' },
@@ -90,6 +115,9 @@ const config: Config = {
       },
     },
   },
-  plugins: [],
+  plugins: [
+    require('@tailwindcss/container-queries'),
+    require('@tailwindcss/typography'),
+  ],
 }
 export default config

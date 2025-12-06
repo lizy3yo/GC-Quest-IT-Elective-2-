@@ -51,18 +51,21 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     const { id: assessmentId } = await params;
     const { searchParams } = new URL(request.url);
     const studentId = searchParams.get('studentId');
-    const limit = parseInt(searchParams.get('limit') || '50');
+    const limit = parseInt(searchParams.get('limit') || '0'); // 0 means no limit - fetch all
     const page = parseInt(searchParams.get('page') || '1');
 
     // Verify the assessment belongs to this teacher
     const assessment = await Assessment.findOne({
       _id: assessmentId,
       teacherId: authResult.userId.toString()
-    }).lean();
+    }).lean() as any;
 
     if (!assessment) {
       return NextResponse.json({ error: 'Assessment not found' }, { status: 404 });
     }
+
+    // Get passing score from assessment (default to 70 if not set)
+    const passingScore = assessment.passingScore || 70;
 
     // Build query
     const query: any = { assessmentId };
@@ -70,23 +73,65 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       query.studentId = studentId;
     }
 
-    // Get submissions with pagination
-    const submissions = await Submission.find(query)
-      .sort({ submittedAt: -1 })
-      .limit(limit)
-      .skip((page - 1) * limit)
-      .lean();
+    // Get submissions - fetch all by default (no pagination unless explicitly requested)
+    let submissionsQuery = Submission.find(query).sort({ submittedAt: -1 });
+    
+    // Only apply pagination if limit is explicitly set and greater than 0
+    if (limit > 0) {
+      submissionsQuery = submissionsQuery.limit(limit).skip((page - 1) * limit);
+    }
+    
+    const submissions = await submissionsQuery.lean();
 
     // Get total count
     const total = await Submission.countDocuments(query);
 
+    // Get student details for each submission
+    const studentIds = [...new Set(submissions.map((sub: any) => sub.studentId))];
+    const students = await User.find({
+      _id: { $in: studentIds },
+      role: 'student'
+    }).select('_id firstName lastName email').lean();
+
+    // Create a map of student info
+    const studentMap = new Map();
+    students.forEach((student: any) => {
+      studentMap.set(student._id.toString(), {
+        firstName: student.firstName,
+        lastName: student.lastName,
+        email: student.email
+      });
+    });
+
+    // Format submissions with student info and calculate passed status
+    const formattedSubmissions = submissions.map((submission: any) => {
+      const studentInfo = studentMap.get(submission.studentId) || {
+        firstName: 'Unknown',
+        lastName: 'Student',
+        email: 'unknown@example.com'
+      };
+
+      // Calculate percentage score and passed status
+      const percentageScore = submission.maxScore > 0 
+        ? (submission.score / submission.maxScore) * 100 
+        : 0;
+      const passed = percentageScore >= passingScore;
+
+      return {
+        ...submission,
+        studentName: `${studentInfo.firstName} ${studentInfo.lastName}`.trim(),
+        studentEmail: studentInfo.email,
+        passed: passed
+      };
+    });
+
     return NextResponse.json({
       success: true,
       data: {
-        submissions,
+        submissions: formattedSubmissions,
         pagination: {
           current: page,
-          total: Math.ceil(total / limit),
+          total: limit > 0 ? Math.ceil(total / limit) : 1,
           count: submissions.length,
           totalItems: total
         }

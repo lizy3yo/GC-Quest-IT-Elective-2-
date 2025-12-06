@@ -67,6 +67,9 @@ export interface ISubmission extends Document {
   startedAt?: Date;
   gradedAt?: Date;
   gradedBy?: string; // teacher ID who graded
+  tabSwitches?: number; // number of tab switches during assessment
+  tabSwitchDurations?: number[]; // durations of tab switches
+  totalAwayMs?: number; // total time away in milliseconds
   createdAt: Date;
   updatedAt: Date;
 }
@@ -181,8 +184,7 @@ const submissionSchema = new Schema<ISubmission>({
   },
   score: {
     type: Number,
-    min: [0, 'Score cannot be negative'],
-    max: [100, 'Score cannot exceed 100']
+    min: [0, 'Score cannot be negative']
   },
   maxScore: {
     type: Number,
@@ -224,6 +226,20 @@ const submissionSchema = new Schema<ISubmission>({
     type: Number,
     min: [0, 'Time spent cannot be negative']
   },
+  tabSwitches: {
+    type: Number,
+    min: [0, 'tabSwitches cannot be negative'],
+    default: 0
+  },
+  tabSwitchDurations: {
+    type: [Number],
+    default: []
+  },
+  totalAwayMs: {
+    type: Number,
+    min: [0, 'totalAwayMs cannot be negative'],
+    default: 0
+  },
   attemptNumber: {
     type: Number,
     required: [true, 'Attempt number is required'],
@@ -252,12 +268,16 @@ const submissionSchema = new Schema<ISubmission>({
 });
 
 // Indexes for better query performance
-submissionSchema.index({ assessmentId: 1, studentId: 1, attemptNumber: 1 });
-submissionSchema.index({ assessmentId: 1, submittedAt: -1 });
-submissionSchema.index({ studentId: 1, submittedAt: -1 });
-submissionSchema.index({ classId: 1, submittedAt: -1 });
-submissionSchema.index({ status: 1 });
-submissionSchema.index({ type: 1 });
+submissionSchema.index({ assessmentId: 1, studentId: 1, attemptNumber: 1 }); // Unique submission lookup
+submissionSchema.index({ assessmentId: 1, submittedAt: -1 }); // Assessment submissions sorted
+submissionSchema.index({ studentId: 1, submittedAt: -1 }); // Student submission history
+submissionSchema.index({ classId: 1, submittedAt: -1 }); // Class submissions
+submissionSchema.index({ status: 1, assessmentId: 1 }); // Filter by status
+submissionSchema.index({ type: 1 }); // Filter by submission type
+submissionSchema.index({ needsManualGrading: 1, status: 1 }); // Pending grading queue
+submissionSchema.index({ gradedBy: 1, gradedAt: -1 }); // Teacher grading history
+submissionSchema.index({ studentId: 1, classId: 1, submittedAt: -1 }); // Student class history
+submissionSchema.index({ assessmentId: 1, status: 1, submittedAt: -1 }); // Assessment grading view
 
 // Virtual to check if submission is late
 submissionSchema.virtual('isLate').get(function () {

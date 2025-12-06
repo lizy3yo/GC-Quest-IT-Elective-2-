@@ -1,10 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-export async function GET(
-  request: NextRequest,
-  { params }: { params: Promise<{ folder: string }> }
-) {
-  const { folder } = await params;
+export async function GET(request: NextRequest, context: any) {
+  const params = await context.params;
+  const { folder } = params;
   
   return NextResponse.json({ 
     message: 'Folder route placeholder',

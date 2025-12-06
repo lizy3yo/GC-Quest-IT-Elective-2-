@@ -171,7 +171,9 @@ export const PATCH = async (request: NextRequest, context: {params: any}) => {
             folder, 
             difficulty, 
             image,
-            tags, 
+            tags,
+            subject,
+            isFavorite,
             accessType, 
             sharingMode,
             password, 
@@ -256,21 +258,34 @@ export const PATCH = async (request: NextRequest, context: {params: any}) => {
             }
         }
 
-        const updateData: any = {
-            title,
-            cards,
-            description,
-            folder: folder ? new Types.ObjectId(folder) : undefined,
-            difficulty,
-            image,
-            tags,
-            accessType,
-            sharingMode: sharingMode || undefined,
-            password: password ? await bcrypt.hash(password, 10) : undefined,
-            linkRole: linkRole || 'viewer',
-            publicRole: publicRole || 'viewer',
-            shareableLink: shareableLink || undefined
-        };
+        const updateData: any = {};
+        
+        if (title !== undefined) updateData.title = title;
+        if (cards !== undefined) updateData.cards = cards;
+        if (description !== undefined) updateData.description = description;
+        if (folder !== undefined) updateData.folder = folder ? new Types.ObjectId(folder) : null;
+        if (difficulty !== undefined) updateData.difficulty = difficulty;
+        if (image !== undefined) updateData.image = image;
+        if (tags !== undefined) updateData.tags = tags;
+        if (subject !== undefined) updateData.subject = subject;
+        if (accessType !== undefined) updateData.accessType = accessType;
+        if (sharingMode !== undefined) updateData.sharingMode = sharingMode;
+        if (password !== undefined) updateData.password = await bcrypt.hash(password, 10);
+        if (linkRole !== undefined) updateData.linkRole = linkRole;
+        if (publicRole !== undefined) updateData.publicRole = publicRole;
+        if (shareableLink !== undefined) updateData.shareableLink = shareableLink;
+
+        // Handle isFavorite with timestamp
+        if (isFavorite !== undefined) {
+            updateData.isFavorite = isFavorite;
+            updateData.favoritedAt = isFavorite ? new Date() : null;
+        }
+
+        // Handle isRead with timestamp
+        if (body.isRead !== undefined) {
+            updateData.isRead = body.isRead;
+            updateData.lastReadAt = body.isRead ? new Date() : null;
+        }
 
         // Handle shared users based on sharing mode
         if (sharingMode === 'restricted') {
@@ -308,7 +323,7 @@ export const PATCH = async (request: NextRequest, context: {params: any}) => {
     }
 }
 
-export const DELETE = async (request: NextRequest, context: {params: any}) => {
+export const DELETE = async (request: NextRequest, context: {params: Promise<{flashcardId: string}>}) => {
     const { flashcardId } = await context.params;
 
     try {

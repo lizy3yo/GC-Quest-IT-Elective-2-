@@ -1,0 +1,6 @@
+{
+  "name": "seed-scripts",
+  "scripts": {
+    "seed:resources": "node seed-resources.js"
+  }
+}

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { PracticeTestGenerator } from '@/lib/ai/practice-test-generator';
 import FlashcardModel from '@/models/flashcard';
+import { Summary } from '@/models/summary';
 import { connectToDatabase } from '@/lib/mongoose';
 import { logger } from '@/lib/winston';
 import { Types } from 'mongoose';
@@ -40,8 +41,9 @@ export async function POST(req: NextRequest) {
     
     const {
       userId,
-      source, // 'flashcards', 'paste', 'upload'
+      source, // 'flashcards', 'summaries', 'mixed', 'paste', 'upload'
       flashcardIds,
+      summaryIds,
       pastedText,
       uploadedText,
       maxQuestions = 20,
@@ -212,6 +214,181 @@ export async function POST(req: NextRequest) {
           testTitle = 'Practice Test from Upload';
         }
       }
+
+    } else if (source === 'summaries' && body.summaryIds && body.summaryIds.length > 0) {
+      // Handle summaries source
+      await connectToDatabase();
+      
+      const summaries = await Summary.find({
+        _id: { $in: body.summaryIds },
+        userId: new Types.ObjectId(userId)
+      }).lean();
+
+      if (!summaries || summaries.length === 0) {
+        return NextResponse.json(
+          { success: false, error: 'No summaries found' },
+          { status: 404 }
+        );
+      }
+
+      // Inherit subject from the first summary (or most common subject if multiple)
+      if (summaries.length === 1) {
+        inheritedSubject = (summaries[0] as any).subject || '';
+      } else {
+        const subjectCounts = summaries.reduce((acc: any, s: any) => {
+          const subj = s.subject || 'Uncategorized';
+          acc[subj] = (acc[subj] || 0) + 1;
+          return acc;
+        }, {});
+        
+        inheritedSubject = Object.entries(subjectCounts)
+          .sort((a: any, b: any) => b[1] - a[1])[0][0];
+      }
+
+      // Convert summaries to content
+      content = summaries.map((s: any) => {
+        return `# ${s.title}\n\n${s.content || ''}`;
+      }).join('\n\n---\n\n');
+
+      if (!testTitle) {
+        testTitle = summaries.length === 1 
+          ? `${(summaries[0] as any).title} - Practice Test`
+          : `Combined Practice Test`;
+      }
+
+      logger.info('Loaded summary content', {
+        summaryCount: summaries.length,
+        contentLength: content.length,
+        inheritedSubject
+      });
+
+    } else if (source === 'mixed' && (body.flashcardIds?.length > 0 || body.summaryIds?.length > 0 || body.uploadedFilesData?.length > 0)) {
+      // Handle mixed source (flashcards, summaries, and/or files)
+      await connectToDatabase();
+      
+      let flashcardContent = '';
+      let summaryContent = '';
+      let fileContent = '';
+      const allSubjects: string[] = [];
+
+      // Process flashcards if provided
+      if (body.flashcardIds && body.flashcardIds.length > 0) {
+        const flashcards = await FlashcardModel.find({
+          _id: { $in: body.flashcardIds },
+          user: new Types.ObjectId(userId)
+        }).lean();
+
+        if (flashcards && flashcards.length > 0) {
+          flashcards.forEach((fc: any) => {
+            if (fc.subject) allSubjects.push(fc.subject);
+          });
+
+          flashcardContent = flashcards.map((fc: any) => {
+            const cards = fc.cards || [];
+            const cardsText = cards.map((c: any) => 
+              `Q: ${c.question}\nA: ${c.answer}`
+            ).join('\n\n');
+            
+            return `# ${fc.title}\n${fc.description || ''}\n\n${cardsText}`;
+          }).join('\n\n---\n\n');
+        }
+      }
+
+      // Process summaries if provided
+      if (body.summaryIds && body.summaryIds.length > 0) {
+        const summaries = await Summary.find({
+          _id: { $in: body.summaryIds },
+          userId: new Types.ObjectId(userId)
+        }).lean();
+
+        if (summaries && summaries.length > 0) {
+          summaries.forEach((s: any) => {
+            if (s.subject) allSubjects.push(s.subject);
+          });
+
+          summaryContent = summaries.map((s: any) => {
+            return `# ${s.title}\n\n${s.content || ''}`;
+          }).join('\n\n---\n\n');
+        }
+      }
+
+      // Process uploaded files if provided (base64 data from sessionStorage)
+      if (body.uploadedFilesData && body.uploadedFilesData.length > 0) {
+        const fileContents: string[] = [];
+        
+        for (const fileData of body.uploadedFilesData) {
+          try {
+            // Extract base64 content (remove data URL prefix)
+            const base64Content = fileData.data.split(',')[1];
+            const buffer = Buffer.from(base64Content, 'base64');
+            
+            let extractedText = '';
+            
+            if (fileData.type === 'text/plain') {
+              extractedText = buffer.toString('utf-8');
+            } else if (fileData.type === 'application/pdf') {
+              try {
+                const pdfParse = (await import('pdf-parse')).default;
+                const pdfData = await pdfParse(buffer);
+                extractedText = pdfData.text;
+              } catch (e) {
+                logger.error('PDF parsing failed for mixed source', { fileName: fileData.name, error: e });
+              }
+            } else if (fileData.type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' || fileData.type === 'application/msword') {
+              try {
+                const mammoth = (await import('mammoth')).default;
+                const result = await mammoth.extractRawText({ buffer });
+                extractedText = result.value;
+              } catch (e) {
+                logger.error('DOCX parsing failed for mixed source', { fileName: fileData.name, error: e });
+              }
+            }
+            
+            if (extractedText.trim()) {
+              fileContents.push(`# ${fileData.name}\n\n${extractedText}`);
+            }
+          } catch (e) {
+            logger.error('Error processing file in mixed source', { fileName: fileData.name, error: e });
+          }
+        }
+        
+        if (fileContents.length > 0) {
+          fileContent = fileContents.join('\n\n---\n\n');
+        }
+      }
+
+      // Combine all content
+      const contentParts = [flashcardContent, summaryContent, fileContent].filter(c => c.trim());
+      content = contentParts.join('\n\n---\n\n');
+
+      if (!content) {
+        return NextResponse.json(
+          { success: false, error: 'No valid content found from selected items' },
+          { status: 404 }
+        );
+      }
+
+      // Find most common subject
+      if (allSubjects.length > 0) {
+        const subjectCounts = allSubjects.reduce((acc: any, subj: string) => {
+          acc[subj] = (acc[subj] || 0) + 1;
+          return acc;
+        }, {});
+        
+        inheritedSubject = Object.entries(subjectCounts)
+          .sort((a: any, b: any) => b[1] - a[1])[0][0];
+      }
+
+      if (!testTitle) {
+        testTitle = 'Combined Practice Test';
+      }
+
+      logger.info('Loaded mixed content', {
+        flashcardCount: body.flashcardIds?.length || 0,
+        summaryCount: body.summaryIds?.length || 0,
+        contentLength: content.length,
+        inheritedSubject
+      });
 
     } else {
       return NextResponse.json(

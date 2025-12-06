@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { connectToDatabase } from '@/lib/mongoose';
 import Assessment from '@/models/assessment';
 import Submission from '@/models/submission';
+import { logActivity } from '@/lib/activity';
 import { authenticate } from '@/lib/middleware/authenticate';
 import { authorize } from '@/lib/middleware/authorize';
 
@@ -22,8 +23,9 @@ interface SubmissionData {
  */
 export async function POST(
   request: NextRequest,
-  { params }: { params: Promise<{ classId: string; assessmentId: string }> }
+  context: any
 ) {
+  const params = await context.params;
   try {
     // Authenticate the user
     const authResult = await authenticate(request);
@@ -74,12 +76,61 @@ export async function POST(
       return NextResponse.json({ error: 'Assessment not found or not available' }, { status: 404 });
     }
 
-    // Check if assessment is still available
-    const now = new Date();
-    if (assessment.dueDate && now > new Date(assessment.dueDate)) {
-      // Allow late submission but mark it as late
+    // Enforce schedule/manual lock before accepting submissions
+    const scheduledOpen = assessment.scheduledOpen ? new Date(assessment.scheduledOpen) : null;
+    const scheduledClose = assessment.scheduledClose
+      ? new Date(assessment.scheduledClose)
+      : (assessment.dueDate ? new Date(assessment.dueDate) : null);
+
+    const isManuallyLocked = !!assessment.isLocked;
+    const currentTime = new Date();
+    let isUnlocked = false;
+    if (!isManuallyLocked) {
+      if (scheduledOpen && currentTime < scheduledOpen) {
+        isUnlocked = false;
+      } else if (scheduledClose && currentTime >= scheduledClose) {
+        isUnlocked = false;
+      } else {
+        isUnlocked = true;
+      }
+    } else {
+      if (scheduledOpen && currentTime >= scheduledOpen) {
+        if (scheduledClose && currentTime >= scheduledClose) {
+          isUnlocked = false;
+        } else {
+          isUnlocked = true;
+        }
+      } else {
+        isUnlocked = false;
+      }
     }
-    if (assessment.availableUntil && now > assessment.availableUntil) {
+
+    if (!isUnlocked) {
+      return NextResponse.json({ error: 'Assessment is currently locked and cannot be submitted' }, { status: 403 });
+    }
+    // Check if assessment is still available
+    if (assessment.dueDate && currentTime > new Date(assessment.dueDate)) {
+      // Normally we'd block submissions after dueDate; however we allow submissions
+      // that were started before the dueDate. Student client includes `startTime`.
+      try {
+        const body = submissionData as any;
+        if (body.startTime) {
+          const startedAt = new Date(body.startTime);
+          if (startedAt <= new Date(assessment.dueDate)) {
+            // allow submission - mark as possibly late but accept
+            console.log('Submission started before dueDate; allowing submit despite current time after dueDate');
+          } else {
+            return NextResponse.json({ error: 'Assessment submission period has ended' }, { status: 403 });
+          }
+        } else {
+          // No startTime provided - reject as late
+          return NextResponse.json({ error: 'Assessment submission period has ended' }, { status: 403 });
+        }
+      } catch (err) {
+        return NextResponse.json({ error: 'Assessment submission period has ended' }, { status: 403 });
+      }
+    }
+    if (assessment.availableUntil && currentTime > assessment.availableUntil) {
       return NextResponse.json({ error: 'Assessment submission period has ended' }, { status: 403 });
     }
 
@@ -114,29 +165,41 @@ export async function POST(
       if (studentAnswer) {
         switch (question.type) {
           case 'mcq':
+            // Convert student answer from option ID to text if needed
+            let studentAnswerText = studentAnswer.answer;
+            if (typeof studentAnswerText === 'string' && studentAnswerText.startsWith('opt-')) {
+              const optionIndex = parseInt(studentAnswerText.split('-')[1]);
+              if (!isNaN(optionIndex) && question.options && question.options[optionIndex]) {
+                studentAnswerText = question.options[optionIndex];
+              }
+            }
+            
             // Use correctAnswer field for MCQ questions
             if (question.correctAnswer !== undefined) {
               // Handle both old format (index) and new format (text)
               if (typeof question.correctAnswer === 'number') {
                 // Old format: correctAnswer is an index
                 const correctOptionText = question.options && question.options[question.correctAnswer];
-                isCorrect = studentAnswer.answer === correctOptionText;
+                isCorrect = studentAnswerText === correctOptionText;
               } else {
                 // New format: correctAnswer is the actual text
-                isCorrect = studentAnswer.answer === question.correctAnswer;
+                isCorrect = studentAnswerText === question.correctAnswer;
               }
               partialScore = isCorrect ? questionPoints : 0;
             } else {
               // Fallback to old answer field for backward compatibility
-              isCorrect = studentAnswer.answer === question.answer;
+              isCorrect = studentAnswerText === question.answer;
               partialScore = isCorrect ? questionPoints : 0;
             }
             break;
 
           case 'identification':
-            // Use answer field for identification questions
-            isCorrect = studentAnswer.answer === question.answer;
-            partialScore = isCorrect ? questionPoints : 0;
+            // Check both correctAnswer (new format) and answer (old format) fields
+            const identificationCorrect = question.correctAnswer || question.answer;
+            if (identificationCorrect) {
+              isCorrect = studentAnswer.answer?.toString().trim().toLowerCase() === identificationCorrect.toString().trim().toLowerCase();
+              partialScore = isCorrect ? questionPoints : 0;
+            }
             break;
 
           case 'checkboxes':
@@ -164,7 +227,17 @@ export async function POST(
               correctOptions = Array.isArray(question.answer) ? question.answer : [question.answer];
             }
             
-            const studentOptions = Array.isArray(studentAnswer.answer) ? studentAnswer.answer : [];
+            // Convert student options from IDs to text if needed
+            let studentOptions = Array.isArray(studentAnswer.answer) ? studentAnswer.answer : [];
+            studentOptions = studentOptions.map((opt: string) => {
+              if (typeof opt === 'string' && opt.startsWith('opt-')) {
+                const optionIndex = parseInt(opt.split('-')[1]);
+                if (!isNaN(optionIndex) && question.options && question.options[optionIndex]) {
+                  return question.options[optionIndex];
+                }
+              }
+              return opt;
+            });
             
             const correctSelected = correctOptions.every((opt: string) => studentOptions.includes(opt));
             const noIncorrectSelected = studentOptions.every((opt: string) => correctOptions.includes(opt));
@@ -203,6 +276,14 @@ export async function POST(
               partialScore = (correctMatches / question.pairs.length) * questionPoints;
               isCorrect = partialScore === questionPoints;
             }
+            break;
+
+          case 'true-false':
+            // Handle true/false questions - compare as strings, case-insensitive
+            const tfCorrectAnswer = (question.correctAnswer ?? question.answer ?? '').toString().toLowerCase().trim();
+            const tfStudentAnswer = (studentAnswer.answer ?? '').toString().toLowerCase().trim();
+            isCorrect = tfStudentAnswer === tfCorrectAnswer;
+            partialScore = isCorrect ? questionPoints : 0;
             break;
 
           case 'short':
@@ -278,14 +359,15 @@ export async function POST(
       type: 'quiz_submission',
       answersCount: submissionData.answers.length,
       gradedAnswersCount: gradedAnswers.length,
-      score: Math.round(percentageScore * 100) / 100,
-      maxScore: 100,
+      score: Math.round(totalScore * 100) / 100,
+      maxScore: maxPossibleScore,
       status: submissionStatus,
       needsManualGrading: needsManualGrading,
       attemptNumber: existingSubmissions.length + 1
     });
 
     // Create submission record
+    const body = submissionData as any;
     const submission = new Submission({
       assessmentId: assessmentId,
       studentId: authResult.userId.toString(),
@@ -293,19 +375,42 @@ export async function POST(
       type: 'quiz_submission', // Required field for online assessments
       answers: submissionData.answers,
       gradedAnswers: gradedAnswers,
-      score: Math.round(percentageScore * 100) / 100, // Round to 2 decimal places
-      maxScore: 100,
+      score: Math.round(totalScore * 100) / 100, // Round to 2 decimal places
+      maxScore: maxPossibleScore, // Use actual max score from questions
       submittedAt: new Date(submissionData.submittedAt),
       timeSpent: submissionData.timeSpent,
       status: submissionStatus,
       needsManualGrading: needsManualGrading,
       attemptNumber: existingSubmissions.length + 1,
+      // Start time & away metrics (for auditing/tab-switch tracking)
+      startedAt: body.startTime ? new Date(body.startTime) : undefined,
+      tabSwitches: typeof body.tabSwitches === 'number' ? body.tabSwitches : 0,
+      tabSwitchDurations: Array.isArray(body.tabSwitchDurations) ? body.tabSwitchDurations : [],
+      totalAwayMs: typeof body.totalAwayMs === 'number' ? body.totalAwayMs : 0,
       // Set gradedAt if it's fully auto-graded
       gradedAt: needsManualGrading ? undefined : new Date()
     });
 
     console.log('Saving submission to database...');
     await submission.save();
+    // Log activity (non-fatal)
+    try {
+      await logActivity({
+        userId: String(authResult.userId),
+        type: 'submission.student',
+        action: 'submitted',
+        meta: {
+          assessmentId: assessmentId,
+          classId: classId,
+          submissionId: submission._id?.toString?.() || null,
+          score: submission.score
+        },
+        progress: 100
+      });
+    } catch (err) {
+      // Logging should not affect submission flow
+      console.error('Failed to record activity for submission:', err);
+    }
     console.log('Submission saved successfully:', submission._id);
 
     return NextResponse.json({
@@ -366,8 +471,9 @@ export async function POST(
  */
 export async function GET(
   request: NextRequest,
-  { params }: { params: Promise<{ classId: string; assessmentId: string }> }
+  context: any
 ) {
+  const params = await context.params;
   try {
     // Authenticate the user
     const authResult = await authenticate(request);

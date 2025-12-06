@@ -64,6 +64,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     }).lean() as any;
 
     if (!classDoc) {
+      console.error('Class not found for id/teacher:', { requestedId: id, teacherId: authResult.userId?.toString() });
       return NextResponse.json({ error: 'Class not found' }, { status: 404 });
     }
 

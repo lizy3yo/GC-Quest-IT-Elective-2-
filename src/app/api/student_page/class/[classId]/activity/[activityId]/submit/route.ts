@@ -82,6 +82,13 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       existingSubmission.status = 'submitted';
       existingSubmission.type = 'file_submission'; // Ensure type is set
       
+      // Reset grading status when student resubmits - teacher needs to re-grade
+      existingSubmission.score = undefined;
+      existingSubmission.maxScore = undefined;
+      existingSubmission.feedback = undefined;
+      existingSubmission.gradedAt = undefined;
+      existingSubmission.gradedBy = undefined;
+      
       const savedSubmission = await existingSubmission.save();
 
       return NextResponse.json({
@@ -313,9 +320,18 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
     // Remove file from submission
     submission.files.splice(index, 1);
     
-    // If no files left, mark as not submitted
+    // If no files left, delete the submission entirely so it shows as "Missing" in teacher panel
     if (submission.files.length === 0) {
-      submission.status = 'draft';
+      await Submission.deleteOne({ _id: submission._id });
+      
+      return NextResponse.json({
+        success: true,
+        data: { 
+          message: 'File removed successfully. Submission deleted as no files remain.',
+          remainingFiles: 0,
+          submissionDeleted: true
+        }
+      });
     }
 
     await submission.save();

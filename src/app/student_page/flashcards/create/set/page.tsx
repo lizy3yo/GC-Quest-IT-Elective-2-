@@ -2,14 +2,54 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import PrimaryActionButton from "@/components/atoms/buttons/PrimaryActionButton";
+import PrimaryActionButton from "@/components/molecules/buttons/buttons/PrimaryActionButton";
 
 export default function FlashcardsCreateSetPage() {
   const router = useRouter();
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
-  const [category, setCategory] = useState("");
+  const [subject, setSubject] = useState("");
+  const [userSubjects, setUserSubjects] = useState<string[]>([]);
   const [isPublic, setIsPublic] = useState(false);
+
+  // Fetch user's enrolled classes on mount
+  useEffect(() => {
+    const fetchUserSubjects = async () => {
+      try {
+        // Get token for authentication
+        const token = localStorage.getItem('accessToken');
+        
+        const response = await fetch('/api/student_page/class?active=true', {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+          },
+          credentials: 'include'
+        });
+        
+        const data = await response.json();
+        console.log('Fetched classes data:', data);
+        
+        if (data.success && data.data.classes) {
+          const subjects = data.data.classes.map((cls: any) => cls.subject as string);
+          const uniqueSubjects = Array.from(new Set(subjects)) as string[];
+          console.log('User enrolled subjects:', uniqueSubjects);
+          setUserSubjects(uniqueSubjects);
+          
+          if (uniqueSubjects.length === 0) {
+            console.warn('No subjects found. User may not be enrolled in any classes.');
+          }
+        } else {
+          console.error('Failed to fetch classes:', data);
+        }
+      } catch (error) {
+        console.error('Error fetching user subjects:', error);
+      }
+    };
+    
+    fetchUserSubjects();
+  }, []);
 
   // Load any saved draft from localStorage
   useEffect(() => {
@@ -19,7 +59,7 @@ export default function FlashcardsCreateSetPage() {
         const data = JSON.parse(raw);
         setTitle(data.title || "");
         setDescription(data.description || "");
-        setCategory(data.category || "");
+        setSubject(data.subject || "");
         setIsPublic(!!data.isPublic);
       }
     } catch {}
@@ -27,14 +67,23 @@ export default function FlashcardsCreateSetPage() {
 
   // Persist as draft while typing
   useEffect(() => {
-    const draft = { title, description, category, isPublic };
+    const draft = { title, description, subject, isPublic };
+    console.log('Saving draft to localStorage:', draft);
     try {
       localStorage.setItem("flashcards:create:draft", JSON.stringify(draft));
     } catch {}
-  }, [title, description, category, isPublic]);
+  }, [title, description, subject, isPublic]);
 
   const handleNext = () => {
-    if (!title.trim()) return;
+    if (!title.trim()) {
+      alert('Please enter a title for your flashcard set');
+      return;
+    }
+    if (!subject.trim()) {
+      alert('Please select a subject/class for your flashcard set');
+      return;
+    }
+    console.log('Moving to cards page with subject:', subject);
     router.push("/student_page/flashcards/create/cards");
   };
 
@@ -81,20 +130,29 @@ export default function FlashcardsCreateSetPage() {
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div>
-              <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Category</label>
+              <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Subject/Class *</label>
               <select
-                value={category}
-                onChange={(e) => setCategory(e.target.value)}
+                value={subject}
+                onChange={(e) => setSubject(e.target.value)}
                 className="w-full p-3 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                required
               >
-                <option value="">Select category</option>
-                <option value="Mathematics">Mathematics</option>
-                <option value="Science">Science</option>
-                <option value="History">History</option>
-                <option value="Language">Language</option>
-                <option value="Computer Science">Computer Science</option>
-                <option value="Other">Other</option>
+                <option value="">Select a subject/class...</option>
+                {userSubjects.length > 0 ? (
+                  userSubjects.map((subj) => (
+                    <option key={subj} value={subj}>
+                      {subj}
+                    </option>
+                  ))
+                ) : (
+                  <option value="" disabled>No enrolled classes found</option>
+                )}
               </select>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                {userSubjects.length > 0 
+                  ? 'Choose from your enrolled classes' 
+                  : 'You need to join a class first to create flashcards'}
+              </p>
             </div>
 
             <div className="flex items-center justify-center">
@@ -124,7 +182,7 @@ export default function FlashcardsCreateSetPage() {
           </button>
           <PrimaryActionButton
             onClick={handleNext}
-            disabled={!title.trim()}
+            disabled={!title.trim() || !subject.trim()}
             title="Go to cards"
           >
             Next
