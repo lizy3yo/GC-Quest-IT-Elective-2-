@@ -23,6 +23,9 @@ import Class from '@/models/class';
 import User from '@/models/user';
 import Assessment from '@/models/assessment';
 import Submission from '@/models/submission';
+import Flashcard from '@/models/flashcard';
+import { Summary } from '@/models/summary';
+import { cache, CACHE_TTL, cacheTags } from '@/lib/cache';
 
 //MIDDLEWARE
 import { authenticate } from '@/lib/middleware/authenticate';
@@ -32,10 +35,8 @@ import { authorize } from '@/lib/middleware/authorize';
  * GET /api/v1/student/class/[classId]
  * Get class details for student view including announcements, resources, assessments, and activities
  */
-export async function GET(
-  request: NextRequest,
-  { params }: { params: Promise<{ classId: string }> }
-) {
+export async function GET(request: NextRequest, context: any) {
+  const params = await context.params;
   try {
     // Authenticate the user
     const authResult = await authenticate(request);
@@ -49,11 +50,22 @@ export async function GET(
       return authzResult as Response;
     }
 
-    await connectToDatabase();
-
     const { classId } = await params;
     const { searchParams } = new URL(request.url);
     const includeDetails = searchParams.get('details') === 'true';
+
+    // Check cache first
+    const cacheKey = `v1:student:class:${classId}:${authResult.userId}:${includeDetails}`;
+    const cachedData = cache.get<any>(cacheKey);
+    if (cachedData) {
+      return NextResponse.json({
+        success: true,
+        data: cachedData,
+        cached: true
+      });
+    }
+
+    await connectToDatabase();
 
     // Find the class and check if student is enrolled
     const classDoc = await Class.findById(classId)
@@ -181,22 +193,25 @@ export async function GET(
     };
 
     if (!includeDetails) {
+      // Cache basic class info for 5 minutes
+      cache.set(cacheKey, { class: classDetails }, {
+        ttl: CACHE_TTL.MEDIUM,
+        tags: [cacheTags.class(classId), cacheTags.user(authResult.userId.toString())]
+      });
+
       return NextResponse.json({
         success: true,
-        data: { class: classDetails }
+        data: { class: classDetails },
+        cached: false
       });
     }
 
-    // Get assessments for this class
+    // Get assessments for this class - only show published assessments to students
     const assessments = await Assessment.find({ 
       classId: classId,
-      // Only show published assessments to students, or those with due dates
-      $or: [
-        { published: true },
-        { dueDate: { $exists: true } }
-      ]
+      published: true
     })
-    .select('title type category format dueDate points description instructions published accessCode createdAt')
+    .select('title type category format dueDate points description instructions published createdAt')
     .sort({ createdAt: -1 })
     .lean();
 
@@ -212,7 +227,6 @@ export async function GET(
       instructions: assessment.instructions || '',
       createdAt: assessment.createdAt ? new Date(assessment.createdAt).toLocaleString() : '',
       published: assessment.published || false,
-      accessCode: assessment.accessCode || '',
       category: assessment.category || 'Activity'
     }));
 
@@ -327,6 +341,50 @@ export async function GET(
       sizeKB: resource.sizeBytes ? Math.round(resource.sizeBytes / 1024) : undefined
     }));
 
+    // Fetch flashcards related to this class (by subject matching class name)
+    let flashcards: any[] = [];
+    try {
+      const classFlashcards = await Flashcard.find({
+        user: authResult.userId,
+        subject: typedClassDoc.name
+      }).select('_id title description cards subject createdAt updatedAt').lean();
+
+      flashcards = classFlashcards.map((fc: any) => ({
+        id: fc._id.toString(),
+        title: fc.title,
+        type: 'flashcard',
+        description: fc.description || `${fc.cards?.length || 0} cards`,
+        cardCount: fc.cards?.length || 0,
+        subject: fc.subject,
+        createdAt: fc.createdAt ? new Date(fc.createdAt).toLocaleString() : '',
+        updatedAt: fc.updatedAt ? new Date(fc.updatedAt).toLocaleString() : ''
+      }));
+    } catch (e) {
+      console.warn('Failed to fetch flashcards for class', typedClassDoc._id, e);
+    }
+
+    // Fetch summaries related to this class (by subject matching class name)
+    let summaries: any[] = [];
+    try {
+      const classSummaries = await Summary.find({
+        userId: authResult.userId.toString(),
+        subject: typedClassDoc.name
+      }).select('_id title content keyPoints subject summaryType createdAt updatedAt').lean();
+
+      summaries = classSummaries.map((summary: any) => ({
+        id: summary._id.toString(),
+        title: summary.title,
+        type: 'summary',
+        description: summary.keyPoints?.slice(0, 2).join('; ') || 'AI-generated summary',
+        summaryType: summary.summaryType,
+        subject: summary.subject,
+        createdAt: summary.createdAt ? new Date(summary.createdAt).toLocaleString() : '',
+        updatedAt: summary.updatedAt ? new Date(summary.updatedAt).toLocaleString() : ''
+      }));
+    } catch (e) {
+      console.warn('Failed to fetch summaries for class', typedClassDoc._id, e);
+    }
+
     const detailedClassInfo = {
       ...classDetails,
       activities,
@@ -335,9 +393,16 @@ export async function GET(
       assessments: studentAssessments
     };
 
+    // Cache detailed class info for 2 minutes (shorter TTL since it includes submission data)
+    cache.set(cacheKey, { class: detailedClassInfo }, {
+      ttl: CACHE_TTL.SHORT * 4, // 2 minutes
+      tags: [cacheTags.class(classId), cacheTags.user(authResult.userId.toString())]
+    });
+
     return NextResponse.json({
       success: true,
-      data: { class: detailedClassInfo }
+      data: { class: detailedClassInfo },
+      cached: false
     });
 
   } catch (error) {

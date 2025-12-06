@@ -20,18 +20,19 @@ import { Schema, model, models, Document } from 'mongoose';
 // Question types based on the form component
 export interface IQuestion {
   id: string;
-  type: 'short' | 'paragraph' | 'mcq' | 'checkboxes' | 'identification' | 'enumeration' | 'match' | 'title' | 'image' | 'section';
+  type: 'short' | 'paragraph' | 'mcq' | 'checkboxes' | 'identification' | 'enumeration' | 'match' | 'title' | 'image' | 'section' | 'true-false';
   title: string;
   required?: boolean;
   options?: string[]; // for mcq, checkboxes
-  answer?: string; // for identification, short answers
-  correctAnswer?: string | string[]; // for mcq (single), checkboxes (multiple)
+  answer?: string; // for identification (legacy), short answers
+  correctAnswer?: string | string[]; // for mcq (single), checkboxes (multiple), identification (preferred)
   items?: string[]; // for enumeration
   pairs?: { left: string; right?: string }[]; // for match type
   description?: string; // for title, section types
   src?: string; // for image type
   alt?: string; // for image type
   points?: number; // points value for the question
+  timeLimit?: number; // time limit in seconds for this question
   requiresManualGrading?: boolean; // true for short, paragraph, essay questions
 }
 
@@ -48,14 +49,13 @@ export interface IAssessment extends Document {
   timeLimitMins?: number;
   maxAttempts?: number;
   published: boolean;
-  accessCode?: string;
+  isLocked?: boolean; // Manual lock/unlock control by teacher
+  scheduledOpen?: Date; // Optional: Auto-unlock at this date/time
+  scheduledClose?: Date; // Optional: Auto-lock at this date/time
   dueDate?: Date;
   availableFrom?: Date;
   availableUntil?: Date;
-  shuffleQuestions?: boolean;
-  shuffleOptions?: boolean;
   showResults?: 'immediately' | 'after_due' | 'never';
-  allowReview?: boolean;
   passingScore?: number;
   totalPoints?: number;
   instructions?: string;
@@ -73,6 +73,27 @@ export interface IAssessment extends Document {
     showProgress?: boolean;
     allowBacktrack?: boolean;
     autoSubmit?: boolean;
+    shuffleQuestions?: boolean;
+    shuffleOptions?: boolean;
+    allowReview?: boolean;
+    trackTabSwitching?: boolean;
+    hideCorrectAnswers?: boolean;
+  };
+  liveSession?: {
+    isActive: boolean;
+    sessionCode?: string;
+    startedAt?: Date;
+    startedBy?: string; // teacher ID
+    currentQuestionIndex?: number;
+    studentsJoined?: string[]; // array of student IDs
+    studentAnswers?: {
+      studentId: string;
+      questionId: string;
+      answer: any;
+      answeredAt: Date;
+      isCorrect?: boolean;
+      timeSpent?: number;
+    }[];
   };
   createdAt: Date;
   updatedAt: Date;
@@ -87,7 +108,7 @@ const questionSchema = new Schema<IQuestion>({
   type: { 
     type: String, 
     required: true,
-    enum: ['short', 'paragraph', 'mcq', 'checkboxes', 'identification', 'enumeration', 'match', 'title', 'image', 'section']
+    enum: ['short', 'paragraph', 'mcq', 'checkboxes', 'identification', 'enumeration', 'match', 'title', 'image', 'section', 'true-false']
   },
   title: { 
     type: String, 
@@ -98,9 +119,14 @@ const questionSchema = new Schema<IQuestion>({
     type: Boolean, 
     default: false 
   },
-  options: [{ 
-    type: String,
-    maxLength: [200, 'Option must be less than 200 characters']
+  options: [{
+    id: String,
+    text: {
+      type: String,
+      maxLength: [200, 'Option text must be less than 200 characters']
+    },
+    isCorrect: Boolean,
+    color: String
   }],
   answer: { 
     type: String,
@@ -142,6 +168,11 @@ const questionSchema = new Schema<IQuestion>({
     default: 1,
     min: [0, 'Points cannot be negative'],
     max: [100, 'Points cannot exceed 100 per question']
+  },
+  timeLimit: {
+    type: Number,
+    min: [0, 'Time limit cannot be negative'],
+    max: [3600, 'Time limit cannot exceed 1 hour (3600 seconds)']
   },
   requiresManualGrading: {
     type: Boolean,
@@ -198,7 +229,7 @@ const assessmentSchema = new Schema<IAssessment>({
   },
   timeLimitMins: { 
     type: Number,
-    min: [1, 'Time limit must be at least 1 minute'],
+    min: [0, 'Time limit cannot be negative'],
     max: [480, 'Time limit cannot exceed 8 hours (480 minutes)']
   },
   maxAttempts: { 
@@ -211,11 +242,15 @@ const assessmentSchema = new Schema<IAssessment>({
     type: Boolean, 
     default: false 
   },
-  accessCode: { 
-    type: String,
-    unique: true,
-    sparse: true, // allows multiple null values
-    match: [/^[A-Z0-9]{6,10}$/, 'Access code must be 6-10 uppercase alphanumeric characters']
+  isLocked: { 
+    type: Boolean, 
+    default: true // Locked by default when published
+  },
+  scheduledOpen: { 
+    type: Date // Optional: Auto-unlock at this date/time
+  },
+  scheduledClose: { 
+    type: Date // Optional: Auto-lock at this date/time
   },
   dueDate: { 
     type: Date 
@@ -227,25 +262,14 @@ const assessmentSchema = new Schema<IAssessment>({
   availableUntil: { 
     type: Date 
   },
-  shuffleQuestions: { 
-    type: Boolean, 
-    default: false 
-  },
-  shuffleOptions: { 
-    type: Boolean, 
-    default: false 
-  },
   showResults: { 
     type: String,
     enum: ['immediately', 'after_due', 'never'],
     default: 'immediately'
   },
-  allowReview: { 
-    type: Boolean, 
-    default: true 
-  },
   passingScore: { 
     type: Number,
+    default: 70,
     min: [0, 'Passing score cannot be negative'],
     max: [100, 'Passing score cannot exceed 100%']
   },
@@ -307,16 +331,78 @@ const assessmentSchema = new Schema<IAssessment>({
     autoSubmit: { 
       type: Boolean, 
       default: false 
+    },
+    shuffleQuestions: { 
+      type: Boolean, 
+      default: false 
+    },
+    shuffleOptions: { 
+      type: Boolean, 
+      default: false 
+    },
+    allowReview: { 
+      type: Boolean, 
+      default: true 
+    },
+    trackTabSwitching: { 
+      type: Boolean, 
+      default: false 
+    },
+    hideCorrectAnswers: { 
+      type: Boolean, 
+      default: false 
+    }
+  },
+  liveSession: {
+    isActive: {
+      type: Boolean,
+      default: false
+    },
+    sessionCode: {
+      type: String
+    },
+    startedAt: {
+      type: Date
+    },
+    startedBy: {
+      type: String
+    },
+    currentQuestionIndex: {
+      type: Number,
+      default: 0
+    },
+    studentsJoined: [{
+      type: String
+    }],
+    studentAnswers: [{
+      studentId: { type: String, required: true },
+      questionId: { type: String, required: true },
+      answer: { type: Schema.Types.Mixed },
+      answeredAt: { type: Date, default: Date.now },
+      isCorrect: { type: Boolean },
+      timeSpent: { type: Number }
+    }],
+    studentStatus: {
+      type: Schema.Types.Mixed,
+      default: {}
     }
   }
 }, {
-  timestamps: true
+  timestamps: true,
+  minimize: false  // This ensures empty/false fields are saved
 });
 
 // Indexes for better query performance
-assessmentSchema.index({ classId: 1, published: 1 });
-assessmentSchema.index({ teacherId: 1, createdAt: -1 });
-assessmentSchema.index({ dueDate: 1 });
+assessmentSchema.index({ classId: 1, published: 1 }); // For class assessments
+assessmentSchema.index({ teacherId: 1, createdAt: -1 }); // For teacher's assessments
+assessmentSchema.index({ dueDate: 1 }); // For due date queries
+assessmentSchema.index({ classId: 1, published: 1, dueDate: 1 }); // Compound for student view
+assessmentSchema.index({ teacherId: 1, category: 1 }); // For filtering by category
+assessmentSchema.index({ isLocked: 1, published: 1 }); // For availability checks
+assessmentSchema.index({ scheduledOpen: 1, scheduledClose: 1 }); // For scheduled assessments
+assessmentSchema.index({ 'liveSession.isActive': 1 }); // For active live sessions
+assessmentSchema.index({ 'liveSession.sessionCode': 1 }); // For joining live sessions
+assessmentSchema.index({ format: 1, classId: 1 }); // For filtering by format
 
 // Virtual for calculating total points if not set
 assessmentSchema.virtual('calculatedTotalPoints').get(function() {
@@ -338,21 +424,36 @@ assessmentSchema.pre('save', function(next) {
   next();
 });
 
-// Method to generate access code
-assessmentSchema.methods.generateAccessCode = function() {
-  const characters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-  let result = '';
-  for (let i = 0; i < 8; i++) {
-    result += characters.charAt(Math.floor(Math.random() * characters.length));
+// Method to check if assessment is unlocked
+assessmentSchema.methods.isUnlocked = function() {
+  const now = new Date();
+  
+  // Check if manually unlocked by teacher
+  if (!this.isLocked) {
+    // Even if manually unlocked, check if it should be closed
+    if (this.scheduledClose && now >= this.scheduledClose) {
+      return false;
+    }
+    return true;
   }
-  this.accessCode = result;
-  return result;
+  
+  // Check if scheduled to open and not yet closed
+  if (this.scheduledOpen && now >= this.scheduledOpen) {
+    // Check if it should be closed
+    if (this.scheduledClose && now >= this.scheduledClose) {
+      return false;
+    }
+    return true;
+  }
+  
+  return false;
 };
 
 // Method to check if assessment is available
 assessmentSchema.methods.isAvailable = function() {
   const now = new Date();
   if (!this.published) return false;
+  if (!this.isUnlocked()) return false;
   if (this.availableFrom && now < this.availableFrom) return false;
   if (this.availableUntil && now > this.availableUntil) return false;
   return true;

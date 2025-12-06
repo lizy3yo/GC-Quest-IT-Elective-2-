@@ -23,7 +23,7 @@ import config from "@/lib/config";
 //TYPES
 import type {ConnectOptions} from 'mongoose';
 
-//CLIENT OPTION
+//CLIENT OPTION - Optimized for Vercel serverless with connection pooling
 const clientOptions: ConnectOptions = {
   dbName: 'gc-quest-db',
   appName: 'GC-Quest',
@@ -32,43 +32,92 @@ const clientOptions: ConnectOptions = {
     strict: true,
     deprecationErrors: true,
   },
+  // Connection pooling settings optimized for serverless
+  maxPoolSize: 10, // Maximum number of connections in the pool
+  minPoolSize: 2, // Minimum number of connections to maintain
+  maxIdleTimeMS: 30000, // Close connections after 30 seconds of inactivity
+  serverSelectionTimeoutMS: 5000, // Timeout after 5s instead of 30s
+  socketTimeoutMS: 45000, // Close sockets after 45 seconds of inactivity
+  family: 4, // Use IPv4, skip trying IPv6
+  // Retry settings
+  retryWrites: true,
+  retryReads: true,
 };
 
 let isConnected = false;
+let connectionPromise: Promise<void> | null = null;
 
 /**
  * Establishes a connection to the MongoDB database using Mongoose.
- * If an error occurs during the connection process, it throws an error
- * with a descriptive message.
- *
+ * Optimized for Vercel serverless with connection reuse and pooling.
+ * 
  * - Uses `MONGO_URI` as the connection string.
  * - `clientOptions` contains additional configuration for Mongoose.
+ * - Implements connection caching to prevent multiple connections in serverless
  * - Errors are properly handled and rethrown for better debugging.
  */
 const connectToDatabase = async (): Promise<void> => {
-    if (isConnected) {
+    // Return existing connection if already connected
+    if (isConnected && mongoose.connection.readyState === 1) {
         return;
+    }
+
+    // Return existing connection promise if connection is in progress
+    if (connectionPromise) {
+        return connectionPromise;
     }
 
     if (!config.MONGO_URI) {
         throw new Error('MONGO_URI is not defined in the environment variables');
     } 
     
-    try {
-        await mongoose.connect(config.MONGO_URI, clientOptions);
-        isConnected = true;
-        
-        console.log('Connected to Database successfully', {
-            uri: config.MONGO_URI,
-            options: clientOptions,
-        });
-    } catch (err) {
-        console.error('Failed to connect to the database:', err);
-        if (err instanceof Error) {
-            throw err;
+    // Create connection promise to prevent multiple simultaneous connections
+    connectionPromise = (async () => {
+        try {
+            // Check if mongoose already has a connection
+            if (mongoose.connection.readyState === 1) {
+                isConnected = true;
+                return;
+            }
+
+            // Disconnect if in a bad state
+            if (mongoose.connection.readyState !== 0) {
+                await mongoose.disconnect();
+            }
+
+            await mongoose.connect(config.MONGO_URI!, clientOptions);
+            isConnected = true;
+            
+            console.log('✅ Connected to Database successfully', {
+                poolSize: clientOptions.maxPoolSize,
+                readyState: mongoose.connection.readyState,
+            });
+
+            // Set up connection event handlers
+            mongoose.connection.on('disconnected', () => {
+                console.log('⚠️ MongoDB disconnected');
+                isConnected = false;
+                connectionPromise = null;
+            });
+
+            mongoose.connection.on('error', (err) => {
+                console.error('❌ MongoDB connection error:', err);
+                isConnected = false;
+                connectionPromise = null;
+            });
+
+        } catch (err) {
+            console.error('❌ Failed to connect to the database:', err);
+            isConnected = false;
+            connectionPromise = null;
+            if (err instanceof Error) {
+                throw err;
+            }
+            throw new Error('Database connection failed');
         }
-        throw new Error('Database connection failed');
-    }
+    })();
+
+    return connectionPromise;
 }
 
 /**

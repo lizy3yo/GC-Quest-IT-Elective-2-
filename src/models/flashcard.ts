@@ -47,6 +47,10 @@ export interface IFlashcard {
     repetitionCount?: number;
     correctCount?: number;
     incorrectCount?: number;
+    isFavorite?: boolean; // Mark as favorite for quick access
+    favoritedAt?: Date; // Timestamp when marked as favorite
+    isRead?: boolean; // Whether the flashcard set has been studied
+    lastReadAt?: Date; // Timestamp when last studied
     createdAt?: Date;
     updatedAt?: Date;
     accessType: 'private' | 'public';
@@ -75,11 +79,12 @@ const sharedUserSchema = new Schema<ISharedUser>({
 });
 
 const flashcardSchema = new Schema<IFlashcard>({
-    user: { type: Schema.Types.ObjectId, ref: 'User', required: true },
+    user: { type: Schema.Types.ObjectId, ref: 'User', required: true, index: true },
     folder: {
         type: Schema.Types.ObjectId,
         ref: 'Folder',
-        required: false
+        required: false,
+        index: true
     },
     title: {
         type: String,
@@ -97,6 +102,10 @@ const flashcardSchema = new Schema<IFlashcard>({
     repetitionCount: { type: Number, default: 0 },
     correctCount: { type: Number, default: 0 },
     incorrectCount: { type: Number, default: 0 },
+    isFavorite: { type: Boolean, default: false },
+    favoritedAt: { type: Date },
+    isRead: { type: Boolean, default: false },
+    lastReadAt: { type: Date },
     accessType: {
         type: String,
         enum: ['private', 'public'],
@@ -130,5 +139,19 @@ const flashcardSchema = new Schema<IFlashcard>({
 }, {
     timestamps: true
 });
+
+// Indexes for query optimization
+flashcardSchema.index({ user: 1, folder: 1 }); // Compound index for user's flashcards in folder
+flashcardSchema.index({ user: 1, subject: 1 }); // For filtering by subject
+flashcardSchema.index({ user: 1, isFavorite: 1 }); // For favorite flashcards
+flashcardSchema.index({ accessType: 1 }); // For public/private filtering
+// Note: shareableLink already has index from unique: true, sparse: true
+flashcardSchema.index({ 'sharedUsers.user': 1 }); // For finding flashcards shared with a user
+flashcardSchema.index({ 'sharedUsers.email': 1 }); // For email-based sharing
+flashcardSchema.index({ tags: 1 }); // For tag-based searches
+flashcardSchema.index({ difficulty: 1 }); // For filtering by difficulty
+flashcardSchema.index({ nextReview: 1 }); // For spaced repetition queries
+flashcardSchema.index({ createdAt: -1 }); // For sorting by creation date
+flashcardSchema.index({ user: 1, createdAt: -1 }); // Compound for user's recent flashcards
 
 export default models.Flashcard || model<IFlashcard>('Flashcard', flashcardSchema);

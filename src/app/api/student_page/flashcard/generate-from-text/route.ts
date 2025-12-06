@@ -32,7 +32,8 @@ export async function POST(request: NextRequest) {
       aiProvider = 'gemini',
       folderId,
       tags = [],
-      maxCards = 20
+      maxCards = 20,
+      isPublic = false
     } = body;
 
     // Validate user exists
@@ -101,7 +102,7 @@ export async function POST(request: NextRequest) {
         ...result.analysis.keyTopics.map(topic => topic.toLowerCase()),
         ...(subject ? [subject.toLowerCase()] : [])
       ],
-      accessType: 'private' as const,
+      accessType: isPublic ? 'public' as const : 'private' as const,
 
       // Enhanced metadata from generator
       aiMetadata: {

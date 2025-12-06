@@ -1,0 +1,162 @@
+.alert {
+    position: fixed;
+    z-index: 1000;
+    min-width: 300px;
+    max-width: 500px;
+    padding: 16px;
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    animation: slideIn 0.3s ease-out;
+    font-family: inherit;
+}
+
+/* Position variants */
+.alert-top-right {
+    top: 20px;
+    right: 20px;
+}
+
+.alert-top-left {
+    top: 20px;
+    left: 20px;
+}
+
+.alert-bottom-right {
+    bottom: 20px;
+    right: 20px;
+}
+
+.alert-bottom-left {
+    bottom: 20px;
+    left: 20px;
+}
+
+.alert-top-center {
+    top: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+}
+
+.alert-bottom-center {
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+}
+
+/* Type variants */
+.alert-success {
+    /* Chip-like success theme: subtle green tint with branded border/text */
+    background-color: #F0FDF4; /* tailwind green-50 */
+    border: 1px solid #1C2B1C; /* brand green used in chips */
+    color: #1C2B1C; /* align text with chip color */
+}
+
+.alert-error {
+    background-color: #fef2f2;
+    border: 1px solid #ef4444;
+    color: #dc2626;
+}
+
+.alert-warning {
+    background-color: #fffbeb;
+    border: 1px solid #f59e0b;
+    color: #d97706;
+}
+
+.alert-info {
+    background-color: #f0f9ff;
+    border: 1px solid #3b82f6;
+    color: #2563eb;
+}
+
+.alert-content {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+}
+
+.alert-icon {
+    font-size: 18px;
+    font-weight: bold;
+    flex-shrink: 0;
+    margin-top: 1px;
+}
+
+.alert-text {
+    flex: 1;
+}
+
+.alert-title {
+    font-weight: 600;
+    font-size: 14px;
+    margin-bottom: 4px;
+}
+
+.alert-message {
+    font-size: 14px;
+    line-height: 1.4;
+}
+
+.alert-close {
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: bold;
+    padding: 0;
+    width: 20px;
+    height: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    transition: background-color 0.2s;
+    flex-shrink: 0;
+}
+
+.alert-close:hover {
+    background-color: rgba(0, 0, 0, 0.1);
+}
+
+/* Animations */
+@keyframes slideIn {
+    from {
+        opacity: 0;
+        transform: translateY(-10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* Dark mode support */
+@media (prefers-color-scheme: dark) {
+    .alert-success {
+        background-color: rgba(28, 43, 28, 0.3); /* match dark chip background */
+        border-color: #1C2B1C;
+        color: #1C2B1C;
+    }
+
+    .alert-error {
+        background-color: #7f1d1d;
+        border-color: #dc2626;
+        color: #f87171;
+    }
+
+    .alert-warning {
+        background-color: #78350f;
+        border-color: #d97706;
+        color: #fbbf24;
+    }
+
+    .alert-info {
+        background-color: #1e3a8a;
+        border-color: #2563eb;
+        color: #60a5fa;
+    }
+
+    .alert-close:hover {
+        background-color: rgba(255, 255, 255, 0.1);
+    }
+}

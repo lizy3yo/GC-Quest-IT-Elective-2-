@@ -142,11 +142,6 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
       return NextResponse.json({ error: 'Assessment not found' }, { status: 404 });
     }
 
-    // Validate score
-    if (typeof score !== 'number' || score < 0 || score > 100) {
-      return NextResponse.json({ error: 'Invalid score. Must be between 0 and 100.' }, { status: 400 });
-    }
-
     // Find the student's submission
     const submission = await Submission.findOne({
       assessmentId: assessmentId,
@@ -155,6 +150,14 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
 
     if (!submission) {
       return NextResponse.json({ error: 'Submission not found' }, { status: 404 });
+    }
+
+    // Get the max score from submission or assessment
+    const maxScore = submission.maxScore || assessment.totalPoints || 100;
+
+    // Validate score against actual max score
+    if (typeof score !== 'number' || score < 0 || score > maxScore) {
+      return NextResponse.json({ error: `Invalid score. Must be between 0 and ${maxScore}.` }, { status: 400 });
     }
 
     // Update the submission with the new score

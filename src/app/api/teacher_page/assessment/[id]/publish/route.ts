@@ -43,9 +43,9 @@ export async function POST(
     // Prepare update object
     const updateData: any = { published: published };
     
-    // Generate access code if publishing and doesn't have one
-    if (published && !existingAssessment.accessCode) {
-      updateData.accessCode = generateAccessCode();
+    // When publishing, lock by default
+    if (published && existingAssessment.isLocked === undefined) {
+      updateData.isLocked = true;
     }
 
     // Update the assessment
@@ -67,24 +67,21 @@ export async function POST(
       data: {
         assessmentId: assessment._id.toString(),
         published: assessment.published,
-        accessCode: assessment.accessCode
+        isLocked: assessment.isLocked
       }
     });
 
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error publishing assessment:', error);
+    console.error('Error stack:', error?.stack);
+    console.error('Error message:', error?.message);
     return NextResponse.json(
-      { error: 'Internal server error' },
+      { 
+        error: 'Internal server error',
+        message: error?.message || 'Unknown error',
+        details: process.env.NODE_ENV === 'development' ? error?.stack : undefined
+      },
       { status: 500 }
     );
   }
-}
-
-function generateAccessCode(): string {
-  const characters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-  let result = '';
-  for (let i = 0; i < 8; i++) {
-    result += characters.charAt(Math.floor(Math.random() * characters.length));
-  }
-  return result;
 }

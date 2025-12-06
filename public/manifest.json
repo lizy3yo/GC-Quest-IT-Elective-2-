@@ -1,0 +1,24 @@
+{
+  "name": "GC Quest - Interactive Learning Platform",
+  "short_name": "GC Quest",
+  "description": "Transform your learning experience with AI-powered flashcards, practice tests, and collaborative study rooms.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#2E7D32",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "/gc-logo.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/favicon.ico",
+      "sizes": "64x64 32x32 24x24 16x16",
+      "type": "image/x-icon"
+    }
+  ],
+  "categories": ["education", "productivity"]
+}

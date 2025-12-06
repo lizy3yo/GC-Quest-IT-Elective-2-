@@ -22,6 +22,7 @@ import { connectToDatabase } from '@/lib/mongoose';
 import Assessment from '@/models/assessment';
 import Class from '@/models/class';
 
+
 //MIDDLEWARE
 import { authenticate } from '@/lib/middleware/authenticate';
 import { authorize } from '@/lib/middleware/authorize';
@@ -44,14 +45,14 @@ export async function GET(request: NextRequest) {
       return authzResult as Response; // Return authorization error response
     }
 
-    await connectToDatabase();
-
     const { searchParams } = new URL(request.url);
     const classId = searchParams.get('classId');
     const category = searchParams.get('category'); // 'Quiz', 'Exam', 'Activity'
     const published = searchParams.get('published'); // 'true', 'false'
     const limit = parseInt(searchParams.get('limit') || '50');
     const page = parseInt(searchParams.get('page') || '1');
+
+    await connectToDatabase();
 
     // Build query
     const query: any = { teacherId: authResult.userId.toString() };
@@ -88,17 +89,41 @@ export async function GET(request: NextRequest) {
     // Get total count for pagination
     const total = await Assessment.countDocuments(query);
 
+    // Ensure all assessments have required fields
+    const validatedAssessments = assessments.map((assessment: any) => ({
+      ...assessment,
+      category: assessment.category || 'Quiz', // Default to Quiz if missing
+      type: assessment.type || 'Mixed',
+      published: assessment.published ?? false,
+      format: assessment.format || 'online',
+      questions: assessment.questions || [],
+      attachments: assessment.attachments || []
+    }));
+
+    console.log(`Fetched ${validatedAssessments.length} assessments for teacher ${authResult.userId}`);
+    console.log('Assessment data sample:', validatedAssessments.slice(0, 2).map((a: any) => ({ 
+      id: a._id, 
+      title: a.title,
+      category: a.category,
+      questions: a.questions?.length || 0,
+      totalPoints: a.totalPoints,
+      timeLimitMins: a.timeLimitMins,
+      description: a.description?.substring(0, 50)
+    })));
+
+    const responseData = {
+      assessments: validatedAssessments,
+      pagination: {
+        current: page,
+        total: Math.ceil(total / limit),
+        count: validatedAssessments.length,
+        totalItems: total
+      }
+    };
+
     return NextResponse.json({
       success: true,
-      data: {
-        assessments,
-        pagination: {
-          current: page,
-          total: Math.ceil(total / limit),
-          count: assessments.length,
-          totalItems: total
-        }
-      }
+      data: responseData
     });
 
   } catch (error) {
@@ -226,9 +251,6 @@ export async function POST(request: NextRequest) {
       id: q.id || `q_${Date.now()}_${index}`
     }));
 
-    // Generate access code for published assessments
-    const accessCode = generateAccessCode();
-
     // Create assessment
     const assessment = new Assessment({
       title,
@@ -243,7 +265,6 @@ export async function POST(request: NextRequest) {
       timeLimitMins,
       maxAttempts: maxAttempts || 1,
       published: true, // Auto-publish when saving assessment
-      accessCode: accessCode, // Generate access code
       dueDate: dueDate ? new Date(dueDate) : undefined,
       availableFrom: availableFrom ? new Date(availableFrom) : new Date(),
       availableUntil: availableUntil ? new Date(availableUntil) : undefined,
@@ -304,14 +325,3 @@ export async function POST(request: NextRequest) {
   }
 }
 
-/**
- * Generate a random access code for assessments
- */
-function generateAccessCode(): string {
-  const characters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-  let result = '';
-  for (let i = 0; i < 8; i++) {
-    result += characters.charAt(Math.floor(Math.random() * characters.length));
-  }
-  return result;
-}

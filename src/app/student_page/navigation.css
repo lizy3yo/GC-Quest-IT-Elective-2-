@@ -342,8 +342,8 @@ aside.allow-overflow * {
   }
 }
 
-/* Mobile responsiveness */
-@media (max-width: 1023px) {
+/* Mobile and Tablet responsiveness - includes tablets up to 1279px */
+@media (max-width: 1279px) {
   .sidebar-collapsed {
     width: 20rem !important;
   }
@@ -360,7 +360,7 @@ aside.allow-overflow * {
     padding-right: 1.5rem;
   }
   
-  /* Disable hover expansion on mobile */
+  /* Disable hover expansion on mobile and tablet */
   .sidebar-collapsed:hover {
     width: 20rem !important;
   }
@@ -427,4 +427,36 @@ aside.allow-overflow * {
 .dark .notification-badge {
   background-color: var(--dark-green-bg, #1C2B1C);
   color: var(--dark-green-main, #04C40A);
+}
+
+
+/* Ensure mobile navbar is visible on initial load for mobile/tablet */
+@media (max-width: 1279px) {
+  /* Force mobile navbar to be visible */
+  header[class*="fixed top-0"] {
+    display: flex !important;
+  }
+  
+  /* Ensure sidebar starts hidden on mobile/tablet until menu is opened */
+  aside {
+    transform: translateX(-100%);
+  }
+  
+  /* Override when menu is open */
+  aside[class*="translate-x-0"] {
+    transform: translateX(0);
+  }
+}
+
+/* Desktop - ensure sidebar is always visible */
+@media (min-width: 1280px) {
+  /* Hide mobile navbar on desktop */
+  header[class*="fixed top-0"][class*="h-14"] {
+    display: none !important;
+  }
+  
+  /* Ensure sidebar is always visible on desktop */
+  aside {
+    transform: translateX(0) !important;
+  }
 }

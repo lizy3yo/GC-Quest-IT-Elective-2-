@@ -22,15 +22,25 @@ export interface IUser{
     username: string;
     email: string;
     password?: string; // made optional
-    role: 'student' | 'teacher' | 'admin';
+    role: 'student' | 'teacher' | 'admin' | 'coordinator' | 'parent';
     honorifics?: string; // optional (e.g. 'Ms.', 'Mr.', 'Dr.')
     firstName: string;
     lastName: string;
+    profileImage?: string; // URL to profile picture
+    studentNumber?: string; // for students (e.g., 202511564)
+    linkedStudentId?: string; // for parents - links to their child's student account
     socialLinks?: {
         website?: string;
         facebook?: string;
         instagram?: string;
     };
+    emailVerified?: boolean;
+    verificationCode?: string;
+    verificationCodeExpiry?: Date;
+    resetPasswordCode?: string;
+    resetPasswordExpiry?: Date;
+    archived?: boolean;
+    archivedAt?: Date;
 }
 
 // User schema
@@ -55,10 +65,17 @@ const userSchema = new Schema<IUser>({
         type: String, 
         required: [true, 'Role is required'],
         enum:{
-            values: ['student', 'teacher', 'admin'],
+            values: ['student', 'teacher', 'admin', 'coordinator', 'parent'],
             message: '{VALUE} is not a valid role'
         }, 
         default: 'student',
+    },
+    studentNumber: {
+        type: String,
+        maxLength: [20, 'Student number must be less than 20 characters long']
+    },
+    linkedStudentId: {
+        type: String
     },
     firstName: { 
         type: String, 
@@ -74,6 +91,10 @@ const userSchema = new Schema<IUser>({
         maxLength: [20, 'Last name must be less than 20 characters long'],
         required: [true, 'Last name is required'],
     },
+    profileImage: {
+        type: String,
+        maxLength: [500, 'Profile image URL must be less than 500 characters long']
+    },
     socialLinks: {
         website: { 
             type: String, 
@@ -87,10 +108,42 @@ const userSchema = new Schema<IUser>({
             type: String, 
             maxLength: [100, 'Instagram URL must be less than 100 characters long'] 
         },
+    },
+    emailVerified: {
+        type: Boolean,
+        default: false
+    },
+    verificationCode: {
+        type: String
+    },
+    verificationCodeExpiry: {
+        type: Date
+    },
+    resetPasswordCode: {
+        type: String
+    },
+    resetPasswordExpiry: {
+        type: Date
+    },
+    archived: {
+        type: Boolean,
+        default: false
+    },
+    archivedAt: {
+        type: Date
     }
 }, {
     timestamps: true
 });
+
+// Indexes for query optimization
+// Note: email and username already have indexes from unique: true
+userSchema.index({ role: 1 }); // For filtering by role
+userSchema.index({ studentNumber: 1 }); // For student lookups
+userSchema.index({ linkedStudentId: 1 }); // For parent-student relationships
+userSchema.index({ archived: 1, role: 1 }); // Compound index for active user queries
+userSchema.index({ emailVerified: 1 }); // For filtering verified users
+userSchema.index({ createdAt: -1 }); // For sorting by registration date
 
 userSchema.pre('save', async function(next) {
     // If no password present or password not modified, skip hashing
@@ -104,13 +157,12 @@ userSchema.pre('save', async function(next) {
 });
 
 // Use models to prevent re-compilation in Next.js
-// If a model was previously compiled without the `honorifics` path
-// (for example during hot-reload), remove it so the updated schema
-// is used when we (re)create the model.
+// Force model refresh if role enum doesn't include 'parent'
 try {
     if (models && (models as any).User) {
         const existing = (models as any).User;
-        if (!existing.schema || !existing.schema.path('honorifics')) {
+        const roleEnum = existing.schema?.path('role')?.enumValues;
+        if (!roleEnum || !roleEnum.includes('parent')) {
             // remove the stale model so it can be recreated with the new schema
             delete (models as any).User;
         }

@@ -114,7 +114,7 @@ export async function GET(req: NextRequest) {
 
     const practiceTests = await PracticeTest.find(query)
       .sort({ createdAt: -1 })
-      .select('title description subject difficulty timeLimit totalPoints topics attempts averageScore isPublic createdAt updatedAt')
+      .select('title description subject difficulty timeLimit totalPoints topics attempts averageScore isPublic isFavorite favoritedAt createdAt updatedAt')
       .lean();
 
     return NextResponse.json({

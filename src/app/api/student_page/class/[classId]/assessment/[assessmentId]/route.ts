@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { connectToDatabase } from '@/lib/mongoose';
-import Assessment from '@/models/assessment';
+import Assessment, { IAssessment } from '@/models/assessment';
 import Submission from '@/models/submission';
 import { authenticate } from '@/lib/middleware/authenticate';
 import { authorize } from '@/lib/middleware/authorize';
@@ -11,8 +11,9 @@ import { authorize } from '@/lib/middleware/authorize';
  */
 export async function GET(
   request: NextRequest,
-  { params }: { params: Promise<{ classId: string; assessmentId: string }> }
+  context: any
 ) {
+  const params = await context.params;
   try {
     // Authenticate the user
     const authResult = await authenticate(request);
@@ -46,7 +47,7 @@ export async function GET(
       _id: assessmentId,
       classId: classId,
       published: true // Only show published assessments to students
-    }).lean() as any;
+    }).lean() as (IAssessment & { _id: any }) | null;
 
     console.log('Assessment found:', !!assessment);
 
@@ -98,6 +99,56 @@ export async function GET(
       return NextResponse.json({ error: 'Assessment is no longer available' }, { status: 403 });
     }
 
+    // Evaluate scheduled open/close and manual lock state.
+    // Use dueDate as a fallback for scheduledClose if provided.
+    const scheduledOpen = assessment.scheduledOpen ? new Date(assessment.scheduledOpen) : null;
+    const scheduledClose = assessment.scheduledClose
+      ? new Date(assessment.scheduledClose)
+      : (assessment.dueDate ? new Date(assessment.dueDate) : null);
+
+    const isManuallyLocked = !!assessment.isLocked;
+    // Check if live session is active - if so, always allow access
+    const isLiveSessionActive = assessment.liveSession?.isActive === true;
+    let isUnlocked = false;
+
+    // If live session is active, always unlock for students
+    if (isLiveSessionActive) {
+      isUnlocked = true;
+    } else if (!isManuallyLocked) {
+      // If not manually locked, consider scheduled times
+      if (scheduledOpen && now < scheduledOpen) {
+        isUnlocked = false;
+      } else if (scheduledClose && now >= scheduledClose) {
+        isUnlocked = false;
+      } else {
+        isUnlocked = true;
+      }
+    } else {
+      // Manually locked: only unlocked if scheduledOpen passed (if provided) and scheduledClose not passed
+      if (scheduledOpen && now >= scheduledOpen) {
+        if (scheduledClose && now >= scheduledClose) {
+          isUnlocked = false;
+        } else {
+          isUnlocked = true;
+        }
+      } else {
+        isUnlocked = false;
+      }
+    }
+
+    if (!isUnlocked) {
+      // Provide helpful debug info to the client so the UI can show when it will open/close
+      return NextResponse.json({
+        error: 'Assessment is currently locked',
+        data: {
+          locked: true,
+          scheduledOpen: scheduledOpen ? scheduledOpen.toISOString() : null,
+          scheduledClose: scheduledClose ? scheduledClose.toISOString() : null,
+          dueDate: assessment.dueDate ? new Date(assessment.dueDate).toISOString() : null
+        }
+      }, { status: 403 });
+    }
+
     // Check if student has already submitted (if maxAttempts is 1)
     // Note: We allow access to view results even after submission
     const existingSubmissions = await Submission.find({
@@ -129,8 +180,10 @@ export async function GET(
       timeLimitMins: assessment.timeLimitMins,
       maxAttempts: assessment.maxAttempts,
       published: assessment.published,
-      accessCode: assessment.accessCode,
       dueDate: assessment.dueDate,
+      isLocked: !!assessment.isLocked,
+      scheduledOpen: assessment.scheduledOpen || null,
+      scheduledClose: assessment.scheduledClose || assessment.dueDate || null,
       instructions: assessment.instructions,
       totalPoints: assessment.totalPoints,
       settings: assessment.settings

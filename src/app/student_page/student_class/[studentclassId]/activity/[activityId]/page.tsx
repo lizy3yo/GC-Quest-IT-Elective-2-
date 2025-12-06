@@ -2,10 +2,11 @@
 
 import React, { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { studentApi, type StudentClassDetails } from '@/services';
-import { useAuth } from '@/hooks/useAuth';
-import Alert from "@/components/molecules/alert_template/Alert";
-import LoadingTemplate2 from '@/components/atoms/loading_template_2/loading2';
+import { studentApi, type StudentClassDetails } from '@/lib/api/student';
+import { useToast } from '@/contexts/ToastContext';
+import LoadingTemplate2 from '@/components/molecules/loading_template_2/loading_template_2/loading2';
+import { Eye, Download } from "lucide-react";
+import ConfirmModal from '@/components/molecules/ConfirmModal';
 
 interface Activity {
   id: string;
@@ -31,11 +32,7 @@ interface AttachmentMeta {
 
 type SubmissionStatus = "submitted" | "late" | "missing";
 
-export default function ActivityDetailPage({ 
-  params 
-}: { 
-  params: Promise<{ studentclassId: string; activityId: string }> 
-}) {
+export default function ActivityDetailPage({ params }: { params: Promise<{ studentclassId: string; activityId: string }> }) {
   const router = useRouter();
   const [classDetails, setClassDetails] = useState<StudentClassDetails | null>(null);
   const [instructorDetail, setInstructorDetail] = useState<{ name?: string; email?: string; avatar?: string } | null>(null);
@@ -45,26 +42,8 @@ export default function ActivityDetailPage({
   const [studentclassId, setStudentclassId] = useState<string | null>(null);
   const [activityId, setActivityId] = useState<string | null>(null);
   
-  // Alert state for user feedback
-  const [alertState, setAlertState] = useState<{
-    isVisible: boolean;
-    type: 'success' | 'error' | 'warning' | 'info';
-    message: string;
-    title?: string;
-    autoClose?: boolean;
-    autoCloseDelay?: number;
-  }>({ isVisible: false, type: 'info', message: '', title: undefined, autoClose: true, autoCloseDelay: 5000 });
-
-  const showAlert = (opts: { type?: 'success' | 'error' | 'warning' | 'info'; message: string; title?: string; autoClose?: boolean; autoCloseDelay?: number; }) => {
-    setAlertState({
-      isVisible: true,
-      type: opts.type ?? 'info',
-      message: opts.message,
-      title: opts.title,
-      autoClose: opts.autoClose ?? true,
-      autoCloseDelay: opts.autoCloseDelay ?? 5000,
-    });
-  };
+  const { showSuccess, showError, showInfo, showWarning, hideToast } = useToast();
+  const progressToastRef = React.useRef<string | null>(null);
   
   // Submission state
   const [submissionFiles, setSubmissionFiles] = useState<File[]>([]);
@@ -76,12 +55,9 @@ export default function ActivityDetailPage({
   const [resourcePreview, setResourcePreview] = useState<AttachmentMeta | null>(null);
   const [isEditingSubmission, setIsEditingSubmission] = useState(false);
   
-  // Comment state
-  const [commentText, setCommentText] = useState("");
-  const [commentFiles, setCommentFiles] = useState<File[]>([]);
-  const [isPostingComment, setIsPostingComment] = useState(false);
-  
-  const { user } = useAuth();
+  // Delete confirmation modal state
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [fileToDelete, setFileToDelete] = useState<{ index: number; name: string } | null>(null);
 
   // Helper: format date as 'MonthName Day, Year hh:mm AM/PM'
   const formatDate = (dateStr?: string | null) => {
@@ -100,14 +76,16 @@ export default function ActivityDetailPage({
     }
   };
 
+  // Unwrap promise-based params using React.use (Next.js 15 / React 19)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const unwrappedParams = (React as any).use ? (React as any).use(params) : null;
+
   useEffect(() => {
-    const unwrap = async () => {
-      const p = await params;
-      setStudentclassId(p.studentclassId);
-      setActivityId(p.activityId);
-    };
-    unwrap();
-  }, [params]);
+    if (unwrappedParams) {
+      setStudentclassId(unwrappedParams.studentclassId ?? null);
+      setActivityId(unwrappedParams.activityId ?? null);
+    }
+  }, [unwrappedParams]);
 
   useEffect(() => {
     if (!studentclassId || !activityId) return;
@@ -254,25 +232,27 @@ export default function ActivityDetailPage({
 
   const removeFile = (index: number) => {
     setSubmissionFiles(prev => prev.filter((_, i) => i !== index));
-    showAlert({ 
-      type: 'info', 
-      message: 'File removed from submission.',
-      autoClose: true,
-      autoCloseDelay: 2000
-    });
+    showInfo('File removed from submission.', undefined, 2000);
   };
 
-  const removeUploadedFile = async (index: number) => {
-    if (!window.confirm('Are you sure you want to remove this file?')) {
-      return;
-    }
+  const removeUploadedFile = async (index: number, fileName: string) => {
+    // Show confirmation modal
+    setFileToDelete({ index, name: fileName });
+    setShowDeleteModal(true);
+  };
 
+  const confirmRemoveUploadedFile = async () => {
+    if (!fileToDelete) return;
+    
+    const { index } = fileToDelete;
+    setShowDeleteModal(false);
+    setFileToDelete(null);
+
+    let removingToastId: string | null = null;
     try {
-      showAlert({ 
-        type: 'info', 
-        message: 'Removing file...',
-        autoClose: false 
-      });
+      removingToastId = showInfo('Removing file...', undefined, 0);
+      // Store in the progress ref to allow another operation to replace it
+      progressToastRef.current = removingToastId;
 
       const response = await fetch(
         `/api/student_page/class/${studentclassId}/activity/${activityId}/submit?fileIndex=${index}`,
@@ -289,23 +269,21 @@ export default function ActivityDetailPage({
       if (result.success) {
         // Refresh the submission data
         await fetchExistingSubmission();
-        showAlert({ 
-          type: 'success', 
-          message: 'File removed successfully.',
-          autoClose: true,
-          autoCloseDelay: 3000
-        });
+
+        // Check if submission was deleted (all files removed)
+        if (result.data?.submissionDeleted) {
+          showWarning('All files removed. Your submission has been deleted. You can submit new files.', undefined, 5000);
+        } else {
+          showSuccess('File removed successfully.', undefined, 3000);
+        }
       } else {
         throw new Error(result.error || 'Failed to remove file');
       }
     } catch (error) {
       console.error('Error removing file:', error);
-      showAlert({ 
-        type: 'error', 
-        message: error instanceof Error ? error.message : 'Failed to remove file. Please try again.',
-        autoClose: true,
-        autoCloseDelay: 5000
-      });
+      showError(error instanceof Error ? error.message : 'Failed to remove file. Please try again.', undefined, 5000);
+      // Hide the persistent 'Removing file...' toast
+      if (removingToastId) { hideToast(removingToastId); if (progressToastRef.current === removingToastId) progressToastRef.current = null; }
     }
   };
 
@@ -343,7 +321,7 @@ export default function ActivityDetailPage({
     for (const file of files) {
       // Check file size (10MB limit)
       if (file.size > 10 * 1024 * 1024) {
-        showAlert({ type: 'error', message: `File "${file.name}" is too large. Maximum size is 10MB.` });
+        showError(`File "${file.name}" is too large. Maximum size is 10MB.`);
         continue;
       }
       
@@ -370,16 +348,13 @@ export default function ActivityDetailPage({
       const hasValidExtension = allowedExtensions.some(ext => fileName.endsWith(ext));
       
       if (!allowedTypes.includes(file.type) && !hasValidExtension) {
-        showAlert({ 
-          type: 'error', 
-          message: `File "${file.name}" is not a supported file type. Please use PDF, Word, Excel, PowerPoint, image, or text files.` 
-        });
+        showError(`File "${file.name}" is not a supported file type. Please use PDF, Word, Excel, PowerPoint, image, or text files.`);
         continue;
       }
 
       // Check file name length
       if (file.name.length > 255) {
-        showAlert({ type: 'error', message: `File name "${file.name}" is too long. Please use a shorter filename.` });
+        showError(`File name "${file.name}" is too long. Please use a shorter filename.`);
         continue;
       }
       
@@ -388,24 +363,19 @@ export default function ActivityDetailPage({
     
     if (validFiles.length > 0) {
       setSubmissionFiles(prev => [...prev, ...validFiles]);
-      showAlert({ 
-        type: 'success', 
-        message: `${validFiles.length} file(s) added successfully.`,
-        autoClose: true,
-        autoCloseDelay: 3000
-      });
+      showSuccess(`${validFiles.length} file(s) added successfully.`, undefined, 3000);
     }
   };
 
   // Function to download teacher attachments using secure endpoint (consistent with student class page)
   const downloadAttachment = async (attachment: { name: string; url: string; type: string; size?: number }, index?: number) => {
     if (!attachment.url || !studentclassId || !activityId) {
-      showAlert({ type: 'error', message: 'Unable to download this attachment - missing required information' });
+      showError('Unable to download this attachment - missing required information');
       return;
     }
 
     try {
-      showAlert({ type: 'info', message: 'Downloading attachment...', autoClose: true, autoCloseDelay: 3000 });
+      showInfo('Downloading attachment...', undefined, 3000);
       
       // Use the attachment index as the primary identifier
       let attachmentId = '';
@@ -451,20 +421,15 @@ export default function ActivityDetailPage({
 
         try {
           const errorData = JSON.parse(errorText);
-          if (errorData.needsReupload) {
-            showAlert({ 
-              type: 'error', 
-              message: `${errorData.error}\n\n${errorData.details}`,
-              autoClose: true,
-              autoCloseDelay: 8000
-            });
+            if (errorData.needsReupload) {
+            showError(`${errorData.error}\n\n${errorData.details}`, undefined, 8000);
             return;
           }
 
           // If server-side download failed but we have a cloudinaryUrl, try direct download with various fallback strategies
           if (errorData.cloudinaryUrl && attachment.url) {
             console.log('Server download failed, trying direct Cloudinary download');
-            showAlert({ type: 'info', message: 'Attempting direct download from cloud storage...', autoClose: true, autoCloseDelay: 3000 });
+            showInfo('Attempting direct download from cloud storage...', undefined, 3000);
 
             // Strategy 1: Try the original URL without any flags
             let directUrl = attachment.url;
@@ -494,24 +459,14 @@ export default function ActivityDetailPage({
               a.click();
               document.body.removeChild(a);
               
-              showAlert({ 
-                type: 'success', 
-                message: 'Download initiated. If it doesn\'t start, please check your downloads folder or try again.',
-                autoClose: true,
-                autoCloseDelay: 5000
-              });
+              showSuccess('Download initiated. If it \'doesn\'t start, please check your downloads folder or try again.', undefined, 5000);
               return;
             } catch (directError) {
               console.log('Direct download also failed, trying new tab approach');
               
               // Final fallback: open in new tab
               window.open(directUrl, '_blank');
-              showAlert({ 
-                type: 'info', 
-                message: 'Opened file in new tab. You may need to save it manually.',
-                autoClose: true,
-                autoCloseDelay: 5000
-              });
+              showInfo('Opened file in new tab. You may need to save it manually.', undefined, 5000);
               return;
             }
           }
@@ -563,10 +518,10 @@ export default function ActivityDetailPage({
       window.URL.revokeObjectURL(url);
 
       console.log('Download completed successfully');
-      showAlert({ type: 'success', message: 'File downloaded successfully', autoClose: true, autoCloseDelay: 3000 });
+      showSuccess('File downloaded successfully', undefined, 3000);
     } catch (error) {
       console.error('Download error:', error);
-      showAlert({ type: 'error', message: `Failed to download file: ${error instanceof Error ? error.message : 'Unknown error'}` });
+      showError(`Failed to download file: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   };
 
@@ -596,25 +551,26 @@ export default function ActivityDetailPage({
         url: previewUrl
       });
     } else {
-      showAlert({ type: 'error', message: 'Unable to preview this attachment' });
+      showError('Unable to preview this attachment');
     }
   };
 
   const handleSubmit = async () => {
     if (submissionFiles.length === 0) {
-      showAlert({ type: 'warning', message: "Please upload at least one file before submitting." });
+      showWarning("Please upload at least one file before submitting.");
       return;
     }
 
     setIsSubmitting(true);
     
+    let uploadProgressToastId: string | null = null;
+    let submittingToastId: string | null = null;
     try {
-      // Show progress for file uploads
-      showAlert({ 
-        type: 'info', 
-        message: `Uploading ${submissionFiles.length} file(s)...`,
-        autoClose: false 
-      });
+      // Show progress for file uploads (keep the same persistent toast and update it per-file)
+      // Hide any previously-active progress toast
+      if (progressToastRef.current) { try { hideToast(progressToastRef.current); } catch (_) {} }
+      uploadProgressToastId = showInfo(`Uploading ${submissionFiles.length} file(s)...`, undefined, 0);
+      progressToastRef.current = uploadProgressToastId;
       
       // Upload files to Cloudinary first
       const uploadedFiles = [];
@@ -624,11 +580,10 @@ export default function ActivityDetailPage({
         
         // Update progress for multiple files
         if (submissionFiles.length > 1) {
-          showAlert({ 
-            type: 'info', 
-            message: `Uploading file ${i + 1} of ${submissionFiles.length}: ${file.name}`,
-            autoClose: false 
-          });
+          // replace the previous per-file progress toast with an updated message
+          if (uploadProgressToastId) { hideToast(uploadProgressToastId); if (progressToastRef.current === uploadProgressToastId) progressToastRef.current = null; }
+          uploadProgressToastId = showInfo(`Uploading file ${i + 1} of ${submissionFiles.length}: ${file.name}`, undefined, 0);
+          progressToastRef.current = uploadProgressToastId;
         }
         
         const formData = new FormData();
@@ -659,11 +614,9 @@ export default function ActivityDetailPage({
       }
       
       // Show submission progress
-      showAlert({ 
-        type: 'info', 
-        message: 'Submitting assignment...',
-        autoClose: false 
-      });
+      if (uploadProgressToastId) { hideToast(uploadProgressToastId); if (progressToastRef.current === uploadProgressToastId) progressToastRef.current = null; uploadProgressToastId = null; }
+      submittingToastId = showInfo('Submitting assignment...', undefined, 0);
+      progressToastRef.current = submittingToastId;
       
       // Now submit the assignment with uploaded file URLs
       const submissionData = {
@@ -699,12 +652,9 @@ export default function ActivityDetailPage({
         throw new Error(submissionResult.error || submissionResult.details || 'Failed to submit assignment');
       }
       
-      showAlert({ 
-        type: 'success', 
-        message: 'Assignment submitted successfully!',
-        autoClose: true,
-        autoCloseDelay: 3000
-      });
+      // Hide any persistent progress toasts
+      if (submittingToastId) { hideToast(submittingToastId); if (progressToastRef.current === submittingToastId) progressToastRef.current = null; submittingToastId = null; }
+      showSuccess('Assignment submitted successfully!', undefined, 3000);
       
       // Clear the file selection state since files are now submitted
       setSubmissionFiles([]);
@@ -719,18 +669,9 @@ export default function ActivityDetailPage({
       // If we were editing, exit edit mode
       if (isEditingSubmission) {
         setIsEditingSubmission(false);
-        showAlert({ 
-          type: 'success', 
-          message: 'Files added to submission successfully!',
-          autoClose: true,
-          autoCloseDelay: 3000
-        });
-      } else {
-        // Small delay before navigation to allow user to see success message and updated UI
-        setTimeout(() => {
-          router.back();
-        }, 2500);
+        showSuccess('Files added to submission successfully!', undefined, 3000);
       }
+      // Don't navigate away - stay on the page to show the updated submission
       
     } catch (error) {
       console.error('Submission error:', error);
@@ -760,229 +701,11 @@ export default function ActivityDetailPage({
         }
       }
       
-      showAlert({ 
-        type: 'error', 
-        message: `${errorMessage}${errorDetails ? ` (${errorDetails})` : ''}`,
-        autoClose: false // Don't auto-close error messages for debugging
-      });
+      // Hide any persistent progress toasts when an error occurs
+      try { if (submittingToastId) { hideToast(submittingToastId); if (progressToastRef.current === submittingToastId) progressToastRef.current = null; submittingToastId = null; } } catch (_) {}
+      showError(`${errorMessage}${errorDetails ? ` (${errorDetails})` : ''}`, undefined, 0);
     } finally {
       setIsSubmitting(false);
-    }
-  };
-
-  const handleCommentFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files) {
-      const files = Array.from(e.target.files);
-      await processCommentFiles(files);
-      
-      // Reset the input
-      e.target.value = '';
-    }
-  };
-
-  // Process comment files (separate from submission files)
-  const processCommentFiles = async (files: File[]) => {
-    // Validate files before upload
-    const validFiles: File[] = [];
-    for (const file of files) {
-      // Check file size (10MB limit)
-      if (file.size > 10 * 1024 * 1024) {
-        showAlert({ type: 'error', message: `File "${file.name}" is too large. Maximum size is 10MB.` });
-        continue;
-      }
-      
-      // Enhanced file type checking to match teacher side
-      const allowedTypes = [
-        'application/pdf',
-        'application/msword', 
-        'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-        'application/vnd.ms-excel',
-        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-        'application/vnd.ms-powerpoint',
-        'application/vnd.openxmlformats-officedocument.presentationml.presentation',
-        'image/jpeg', 
-        'image/png', 
-        'image/gif',
-        'image/webp',
-        'text/plain',
-        'text/csv'
-      ];
-      
-      // Also check file extensions as fallback
-      const allowedExtensions = ['.pdf', '.doc', '.docx', '.xls', '.xlsx', '.ppt', '.pptx', '.jpg', '.jpeg', '.png', '.gif', '.webp', '.txt', '.csv'];
-      const fileName = file.name.toLowerCase();
-      const hasValidExtension = allowedExtensions.some(ext => fileName.endsWith(ext));
-      
-      if (!allowedTypes.includes(file.type) && !hasValidExtension) {
-        showAlert({ 
-          type: 'error', 
-          message: `File "${file.name}" is not a supported file type. Please use PDF, Word, Excel, PowerPoint, image, or text files.` 
-        });
-        continue;
-      }
-
-      // Check file name length
-      if (file.name.length > 255) {
-        showAlert({ type: 'error', message: `File name "${file.name}" is too long. Please use a shorter filename.` });
-        continue;
-      }
-      
-      validFiles.push(file);
-    }
-    
-    if (validFiles.length > 0) {
-      setCommentFiles(prev => [...prev, ...validFiles]);
-      showAlert({ 
-        type: 'success', 
-        message: `${validFiles.length} file(s) added successfully.`,
-        autoClose: true,
-        autoCloseDelay: 3000
-      });
-    }
-  };
-
-  const removeCommentFile = (index: number) => {
-    setCommentFiles(prev => prev.filter((_, i) => i !== index));
-    showAlert({ 
-      type: 'info', 
-      message: 'File removed successfully.',
-      autoClose: true,
-      autoCloseDelay: 2000
-    });
-  };
-
-  const handlePostComment = async () => {
-    if (!commentText.trim() && commentFiles.length === 0) {
-      showAlert({ type: 'warning', message: "Please enter a comment or attach a file." });
-      return;
-    }
-
-    setIsPostingComment(true);
-    
-    try {
-      // Show progress for file uploads
-      if (commentFiles.length > 0) {
-        showAlert({ 
-          type: 'info', 
-          message: `Uploading ${commentFiles.length} file(s)...`,
-          autoClose: false 
-        });
-      }
-      
-      // Upload files to Cloudinary first
-      const uploadedFiles = [];
-      
-      for (let i = 0; i < commentFiles.length; i++) {
-        const file = commentFiles[i];
-        
-        // Update progress for multiple files
-        if (commentFiles.length > 1) {
-          showAlert({ 
-            type: 'info', 
-            message: `Uploading file ${i + 1} of ${commentFiles.length}: ${file.name}`,
-            autoClose: false 
-          });
-        }
-        
-        const formData = new FormData();
-        formData.append('file', file);
-        
-        const uploadResponse = await fetch('/api/upload-file', {
-          method: 'POST',
-          body: formData
-        });
-        
-        if (!uploadResponse.ok) {
-          throw new Error(`Upload failed for ${file.name}: ${uploadResponse.statusText}`);
-        }
-        
-        const uploadResult = await uploadResponse.json();
-        
-        if (!uploadResult.success) {
-          throw new Error(`Failed to upload ${file.name}: ${uploadResult.error || 'Unknown error'}`);
-        }
-        
-        uploadedFiles.push({
-          name: file.name,
-          url: uploadResult.data.url,
-          type: file.type,
-          size: file.size,
-          cloudinaryPublicId: uploadResult.data.public_id
-        });
-      }
-      
-      // Show posting progress
-      showAlert({ 
-        type: 'info', 
-        message: 'Posting comment...',
-        autoClose: false 
-      });
-      
-      // Post comment with attachments
-      const commentData = {
-        text: commentText.trim(),
-        attachments: uploadedFiles
-      };
-      
-      const commentResponse = await fetch(`/api/student_page/class/${studentclassId}/activity/${activityId}/comment`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('accessToken')}`
-        },
-        body: JSON.stringify(commentData)
-      });
-      
-      if (!commentResponse.ok) {
-        throw new Error(`Comment posting failed: ${commentResponse.statusText}`);
-      }
-      
-      const commentResult = await commentResponse.json();
-      
-      if (!commentResult.success) {
-        throw new Error(commentResult.error || 'Failed to post comment');
-      }
-      
-      // Clear comment form
-      setCommentText("");
-      setCommentFiles([]);
-      
-      showAlert({ 
-        type: 'success', 
-        message: 'Comment posted successfully!',
-        autoClose: true,
-        autoCloseDelay: 3000
-      });
-      
-      // Optionally refresh comments or update state
-      // You might want to fetch comments here to show the new comment
-      
-    } catch (error) {
-      console.error('Comment posting error:', error);
-      
-      // Provide detailed error messages based on error type
-      let errorMessage = "Failed to post comment. Please try again.";
-      
-      if (error instanceof Error) {
-        if (error.message.includes('Network')) {
-          errorMessage = "Network error. Please check your connection and try again.";
-        } else if (error.message.includes('upload')) {
-          errorMessage = `File upload failed: ${error.message}`;
-        } else if (error.message.includes('size')) {
-          errorMessage = "One or more files are too large. Please use files under 10MB.";
-        } else {
-          errorMessage = error.message;
-        }
-      }
-      
-      showAlert({ 
-        type: 'error', 
-        message: errorMessage,
-        autoClose: true,
-        autoCloseDelay: 5000
-      });
-    } finally {
-      setIsPostingComment(false);
     }
   };
 
@@ -1090,42 +813,35 @@ export default function ActivityDetailPage({
   const derivedMax: number = existingSubmission && (existingSubmission.maxScore !== undefined && existingSubmission.maxScore !== null)
     ? existingSubmission.maxScore
     : (activity ? (activity.totalPoints ?? activity.points ?? 100) : 100);
+  
+  // Check if submission is graded (has a score)
+  const isGraded = derivedScore !== null;
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-900 p-6 transition-colors duration-200">
-      {/* Global alert */}
-      <Alert
-        type={alertState.type}
-        message={alertState.message}
-        title={alertState.title}
-        isVisible={alertState.isVisible}
-        onClose={() => setAlertState((s) => ({ ...s, isVisible: false }))}
-        autoClose={alertState.autoClose}
-        autoCloseDelay={alertState.autoCloseDelay}
-        position="top-right"
-      />
-      
       <div className="max-w-6xl mx-auto">
         {/* Top row removed as requested */}
 
         {/* Header */}
         {/* Class Banner (matches design) */}
         <div className="mb-6">
-          <div className="bg-[#0F2415] text-white rounded-lg p-6 flex items-center justify-between">
-            <div>
-              <div className="flex items-center gap-3">
-                <div className="text-sm opacity-90 px-3 py-1 bg-[#15321f] rounded-full">{classDetails?.classCode}</div>
-                <div className="text-sm opacity-90 px-3 py-1 bg-[#15321f] rounded-full">{classDetails?.schedule}</div>
+          <div className="bg-[#2E7D32] dark:bg-[hsl(142.1,76.2%,36.3%)] text-white rounded-lg p-6 flex items-center justify-between">
+            <div className="min-w-0">
+              <h1 className="text-2xl font-normal text-white truncate" title={classDetails?.name || activity.title}>{classDetails?.name || activity.title}</h1>
+              <div className="mt-1 flex flex-wrap items-center gap-3 text-sm text-white/90">
+                <span className="truncate" title={classDetails?.classCode ?? ''}>{classDetails?.classCode ?? '—'}</span>
+                <span>•</span>
+                <span className="truncate" title={classDetails?.schedule ?? ''}>{classDetails?.schedule ?? '—'}</span>
+                {(classDetails?.instructor?.name || instructorDetail?.name) && (
+                  <>
+                    <span>•</span>
+                    <span className="truncate" title={`Instructor: ${classDetails?.instructor?.name || instructorDetail?.name}`}>Instructor: {classDetails?.instructor?.name || instructorDetail?.name}</span>
+                  </>
+                )}
               </div>
-              <h1 className="text-2xl font-semibold mt-3">{classDetails?.name || activity.title}</h1>
-              <div className="text-sm opacity-80 mt-1">Instructor: {classDetails?.instructor?.name || instructorDetail?.name || 'Unknown'}</div>
             </div>
-            <div className="flex items-center gap-3">
-              {/* Show settings for teacher or admin */}
-              {user && (user.role === 'teacher' || user.role === 'admin' || user.email === classDetails?.instructor?.email) ? (
-                <button className="bg-slate-800 text-white px-4 py-2 rounded-md text-sm">Settings</button>
-              ) : null}
-            </div>
+
+            {/* Header actions removed: Join and Settings buttons */}
           </div>
         </div>
 
@@ -1165,14 +881,14 @@ export default function ActivityDetailPage({
                     {/* Submission Status */}
                     <div className={`px-3 py-1 rounded-full text-xs font-medium ${
                       !existingSubmission ? 
-                        'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300' :
+                        'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300' :
                       existingSubmission && existingSubmission.submittedAt && activity.dueDate ?
                         new Date(existingSubmission.submittedAt) <= new Date(activity.dueDate) ?
                           'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300' :
                           'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300' :
                         existingSubmission ?
                           'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300' :
-                          'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300'
+                          'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300'
                     }`}>
                       {!existingSubmission ? 
                         'Pending' :
@@ -1271,9 +987,9 @@ export default function ActivityDetailPage({
                               </div>
                             </div>
                             <div className="flex items-center gap-2">
-                              {isEditingSubmission && (
+                              {isEditingSubmission && !isGraded && (
                                 <button
-                                  onClick={() => removeUploadedFile(index)}
+                                  onClick={() => removeUploadedFile(index, normalizeAttachmentName(file.name))}
                                   className="px-3 py-1.5 text-xs bg-red-600 text-white rounded hover:bg-red-700 transition-colors"
                                   title="Remove file"
                                 >
@@ -1291,8 +1007,8 @@ export default function ActivityDetailPage({
                       )}
                     </div>
                     
-                    {/* File Upload Area - Show when editing */}
-                    {isEditingSubmission && (
+                    {/* File Upload Area - Show when editing and not graded */}
+                    {isEditingSubmission && !isGraded && (
                       <div className="space-y-4 mt-4 pt-4 border-t border-slate-200 dark:border-slate-700">
                         <div className="text-sm font-medium text-slate-700 dark:text-slate-200">Add more files:</div>
                         
@@ -1370,7 +1086,11 @@ export default function ActivityDetailPage({
                     )}
                     
                     <div className="flex justify-end items-center">
-                      {!isEditingSubmission ? (
+                      {isGraded ? (
+                        <div className="text-sm text-slate-500 dark:text-slate-400 italic">
+                          Submission graded - editing disabled
+                        </div>
+                      ) : !isEditingSubmission ? (
                         <button
                           onClick={() => setIsEditingSubmission(true)}
                           className="text-sm text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 transition-colors"
@@ -1416,7 +1136,7 @@ export default function ActivityDetailPage({
                         htmlFor="file-upload"
                         className="cursor-pointer block"
                       >
-                        <div className="text-4xl mb-3">�</div>
+                        <div className="text-4xl mb-3">📁</div>
                         <div className="text-sm font-medium text-slate-700 dark:text-slate-200 mb-1">
                           Add files
                         </div>
@@ -1430,7 +1150,7 @@ export default function ActivityDetailPage({
                     {submissionFiles.length > 0 && (
                       <div className="space-y-3">
                         {submissionFiles.map((file, index) => (
-                          <div key={index} className="flex items-center gap-3 p-3 bg-slate-50 dark:bg-slate-900 rounded-lg border">
+                          <div key={index} className="flex items-center gap-3 p-3 bg-slate-50 dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-700">
                             <div className="w-10 h-10 rounded flex items-center justify-center">
                               <FileIcon name={file.name} type={file.type} size={40} />
                             </div>
@@ -1520,28 +1240,8 @@ export default function ActivityDetailPage({
               </div>
               <div className="p-6">
                 {teacherAttachments.length === 0 ? (
-                  <div className="space-y-3">
-                    {/* Default attachment from photo */}
-                    <div className="flex items-center gap-4 p-4 bg-slate-50 dark:bg-slate-900 rounded-lg border">
-                      <div className="w-12 h-12 bg-red-100 dark:bg-red-900/30 rounded flex items-center justify-center">
-                        <span className="text-sm font-semibold text-red-700 dark:text-red-300">
-                          PDF
-                        </span>
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="text-base font-medium text-slate-700 dark:text-slate-200">
-                          Rubric.pdf
-                        </div>
-                        <div className="text-sm text-slate-500 dark:text-slate-400">
-                          240 KB
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <button className="p-2 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-md transition-colors">
-                          <span className="text-lg">⬇️</span>
-                        </button>
-                      </div>
-                    </div>
+                  <div className="text-center py-8 text-slate-500 dark:text-slate-400">
+                    <div className="text-sm">No attachments available</div>
                   </div>
                 ) : (
                   <div className="space-y-3">
@@ -1605,7 +1305,7 @@ export default function ActivityDetailPage({
                       const fold = 'rgba(255,255,255,0.18)';
 
                       return (
-                        <div key={index} className="flex items-center gap-4 p-4 bg-slate-50 dark:bg-slate-900 rounded-lg border">
+                        <div key={index} className="flex items-center gap-4 p-4 bg-slate-50 dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-700">
                           <div className="w-12 h-12 rounded flex items-center justify-center">
                             <svg width="48" height="48" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden>
                               <rect x="0" y="0" width="48" height="48" rx="8" fill={fill} />
@@ -1625,17 +1325,17 @@ export default function ActivityDetailPage({
                           <div className="flex items-center gap-2">
                             <button
                               onClick={() => previewAttachment(attachment)}
-                              className="px-3 py-1.5 text-xs bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
-                              title="Preview file"
+                              className="p-2 rounded-md bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors flex items-center justify-center"
+                              title="Preview"
                             >
-                              Preview
+                              <Eye className="w-4 h-4" />
                             </button>
                             <button
                               onClick={() => downloadAttachment(attachment, index)}
-                              className="px-3 py-1.5 text-xs border border-slate-300 dark:border-slate-600 rounded hover:bg-slate-50 dark:hover:bg-slate-600 transition-colors"
-                              title="Download file"
+                              className="p-2 rounded-md bg-[#2E7D32] dark:bg-[hsl(142.1,76.2%,36.3%)] text-white hover:bg-[#1B5E20] dark:hover:bg-[hsl(142.1,76.2%,30%)] transition-colors flex items-center justify-center"
+                              title="Download"
                             >
-                              Download
+                              <Download className="w-4 h-4" />
                             </button>
                           </div>
                         </div>
@@ -1646,83 +1346,7 @@ export default function ActivityDetailPage({
               </div>
             </div>
 
-            {/* Comments Section */}
-            <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg overflow-hidden">
-              <div className="p-6 border-b border-slate-200 dark:border-slate-700">
-                <div className="text-lg font-semibold text-slate-800 dark:text-slate-100">Comments</div>
-                <div className="text-sm text-slate-500 dark:text-slate-400 mt-1">
-                  No comments yet. Be first to comment.
-                </div>
-              </div>
-              
-              <div className="p-6">
-                <div className="flex items-start gap-3">
-                  <div className="w-8 h-8 bg-slate-300 dark:bg-slate-600 rounded-full flex items-center justify-center">
-                    <span className="text-sm font-medium text-slate-700 dark:text-slate-200">
-                      {user?.name?.charAt(0).toUpperCase() || "U"}
-                    </span>
-                  </div>
-                  <div className="flex-1">
-                    <textarea
-                      value={commentText}
-                      onChange={(e) => setCommentText(e.target.value)}
-                      placeholder="Write a comment..."
-                      rows={3}
-                      className="w-full text-sm rounded-md border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-400/50 resize-y"
-                    />
-                    
-                    {/* Comment Files List */}
-                    {commentFiles.length > 0 && (
-                      <div className="mt-3 space-y-2">
-                        {commentFiles.map((file, index) => (
-                          <div key={index} className="flex items-center gap-3 p-2 bg-slate-100 dark:bg-slate-800 rounded-lg border">
-                            <div className="w-8 h-8 rounded flex items-center justify-center">
-                              <FileIcon name={file.name} type={file.type} size={32} />
-                            </div>
-                            <div className="flex-1 min-w-0">
-                              <div className="text-xs font-medium text-slate-700 dark:text-slate-200 truncate">
-                                {normalizeAttachmentName(file.name)}
-                              </div>
-                              <div className="text-xs text-slate-500 dark:text-slate-400">
-                                {(file.size / 1024).toFixed(1)} KB
-                              </div>
-                            </div>
-                            <button
-                              onClick={() => removeCommentFile(index)}
-                              className="text-slate-400 hover:text-red-500 text-sm font-bold w-6 h-6 flex items-center justify-center"
-                            >
-                              ×
-                            </button>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                    
-                    <div className="mt-3 flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <label className="text-xs px-2 py-1 rounded-md bg-slate-100 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 cursor-pointer text-slate-600 dark:text-slate-300 hover:text-blue-600 dark:hover:text-blue-400 transition-colors">
-                          <input
-                            type="file"
-                            multiple
-                            accept=".pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.jpg,.jpeg,.png,.gif,.txt,.csv"
-                            className="hidden"
-                            onChange={handleCommentFileUpload}
-                          />
-                          📎 Attach Files
-                        </label>
-                      </div>
-                      <button 
-                        onClick={handlePostComment}
-                        disabled={(!commentText.trim() && commentFiles.length === 0) || isPostingComment}
-                        className="px-4 py-2 text-sm font-medium bg-slate-600 text-white rounded-md hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                      >
-                        {isPostingComment ? "Posting..." : "Comment"}
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
+
           </div>
         </div>
       </div>
@@ -2007,15 +1631,21 @@ export default function ActivityDetailPage({
           </div>
         </div>
       )}
+
+      {/* Delete Confirmation Modal */}
+      <ConfirmModal
+        isOpen={showDeleteModal}
+        onClose={() => {
+          setShowDeleteModal(false);
+          setFileToDelete(null);
+        }}
+        onConfirm={confirmRemoveUploadedFile}
+        title="Remove File"
+        message={`Are you sure you want to remove "${fileToDelete?.name}"? This action cannot be undone.`}
+        confirmText="Remove"
+        cancelText="Cancel"
+        isDangerous={true}
+      />
     </div>
   );
 }
-
-// Resource preview modal JSX inserted after main component
-// (keeps file-scoped helper state and uses setResourcePreview above)
-
-// Attach the modal to the main component by rendering conditionally near the end of file
-// We keep this render outside the main return to avoid refactoring large JSX; the main component
-// will reference `resourcePreview` and `setResourcePreview` from closure via top-level state.
-// To hook it up, we render the modal inside the component's returned JSX by placing the element
-// where `resourcePreview` is in scope. However, TSX files allow function components anywhere.

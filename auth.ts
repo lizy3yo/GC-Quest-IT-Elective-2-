@@ -15,6 +15,19 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
   secret: process.env.AUTH_SECRET,
   session: {
     strategy: "jwt", // keep session in JWT
+    maxAge: 24 * 60 * 60, // 24 hours (in seconds)
+    updateAge: 60 * 60, // Update session every 1 hour
+  },
+  cookies: {
+    sessionToken: {
+      name: `authjs.session-token`,
+      options: {
+        httpOnly: true,
+        sameSite: 'lax',
+        path: '/',
+        secure: process.env.NODE_ENV === 'production'
+      }
+    }
   },
   callbacks: {
     // Keep your existing signIn flow (creates user in DB).
@@ -66,7 +79,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
     },
 
     // jwt callback: run on sign in and on subsequent requests
-    async jwt({ token, user, account }) {
+    async jwt({ token, user, account, trigger }) {
       // On initial sign-in via provider, `user` will be set.
       if (user) {
         // Ensure we have a stable user id (set in signIn callback)
@@ -96,9 +109,31 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           (token as any).refreshToken = refreshToken;
           token.sub = userId;
           (token as any).user = user;
+          (token as any).iat = Math.floor(Date.now() / 1000); // Issued at time
         } catch (err) {
           // swallow to avoid breaking NextAuth flow; logging can be added
           console.error("JWT sign error:", err);
+        }
+      }
+
+      // Check if token needs refresh (if older than 1 hour)
+      const tokenAge = Math.floor(Date.now() / 1000) - ((token as any).iat || 0);
+      if (tokenAge > 60 * 60 && trigger === 'update') {
+        // Token is older than 1 hour, refresh it
+        const userId = token.sub;
+        const accessSecret = process.env.JWT_ACCESS_SECRET || process.env.AUTH_SECRET || "dev_access_secret";
+        const accessExpiry = process.env.ACCESS_TOKEN_EXPIRY || "1d";
+
+        try {
+          const newAccessToken = jwt.sign(
+            { userId },
+            accessSecret as Secret,
+            ({ expiresIn: accessExpiry } as SignOptions)
+          );
+          (token as any).accessToken = newAccessToken;
+          (token as any).iat = Math.floor(Date.now() / 1000);
+        } catch (err) {
+          console.error("JWT refresh error:", err);
         }
       }
 

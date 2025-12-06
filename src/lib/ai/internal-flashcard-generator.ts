@@ -1,4 +1,4 @@
-import { GoogleGenerativeAI } from '@google/generative-ai';
+import Bytez from 'bytez.js';
 import { logger } from '@/lib/winston';
 
 export interface InternalFlashcardOptions {
@@ -62,7 +62,8 @@ export interface FlashcardGenerationResult {
 }
 
 export class InternalFlashcardGenerator {
-  private genAI: GoogleGenerativeAI;
+  private genAI: any;
+  private fallbackModels: string[];
 
   constructor() {
     const apiKey = process.env.GOOGLE_AI_API_KEY_FLASHCARD || process.env.GOOGLE_AI_API_KEY;
@@ -74,11 +75,17 @@ export class InternalFlashcardGenerator {
     logger.info('InternalFlashcardGenerator initialized', {
       hasFlashcardKey: !!process.env.GOOGLE_AI_API_KEY_FLASHCARD,
       hasBackupKey: !!process.env.GOOGLE_AI_API_KEY,
-      keyPreview: apiKey.substring(0, 10) + '...',
-      keyLength: apiKey.length
+      keyPreview: apiKey ? apiKey.substring(0, 10) + '...' : undefined,
+      keyLength: apiKey ? apiKey.length : 0
     });
-    
-    this.genAI = new GoogleGenerativeAI(apiKey);
+
+    // Initialize Bytez client with the flashcard API key (uses models like openai/gpt-4.1)
+    this.genAI = new Bytez(apiKey);
+    this.fallbackModels = [
+      'openai/gpt-4.1',
+      'openai-community/gpt2',
+      'google/gemma-3-1b-it'
+    ];
   }
 
   async generateFlashcards(options: InternalFlashcardOptions): Promise<FlashcardGenerationResult> {
@@ -92,29 +99,64 @@ export class InternalFlashcardGenerator {
       throw new Error('Content too long. Please limit to 50,000 characters');
     }
 
-    const model = this.genAI.getGenerativeModel({ 
-      model: "gemini-2.0-flash-exp",
-      generationConfig: {
-        temperature: 0.1, // Low for consistent, structured output
-        topP: 0.9,
-        topK: 2000,
-        maxOutputTokens: 3000,
-      }
-    });
-
     const prompt = this.createPrompt(content, title, difficulty, contentType, maxCards);
 
     try {
-      logger.info('Generating flashcards with internal AI', {
+      logger.info('Generating flashcards with OpenAI GPT-4.1', {
         contentLength: content.length,
         maxCards,
         difficulty,
         contentType
       });
 
-      const result = await model.generateContent(prompt);
-      const response = await result.response;
-      const generatedText = response.text();
+      // Use Bytez SDK to call model openai/gpt-4.1
+      const model = this.genAI.model('openai/gpt-4.1');
+      const res: any = await model.run([
+        {
+          role: 'user',
+          content: prompt
+        }
+      ]);
+
+      if (res?.error) {
+        throw new Error(`Model error: ${JSON.stringify(res.error)}`);
+      }
+
+      // Normalize output - Bytez returns { output: { role: 'assistant', content: 'text' } }
+      let generatedText = '';
+      const output = res?.output;
+      
+      if (!output) {
+        generatedText = '';
+      } else if (typeof output === 'string') {
+        generatedText = output;
+      } else if (typeof output === 'object' && !Array.isArray(output)) {
+        // Primary case for Bytez: { role: 'assistant', content: 'JSON string' }
+        if (typeof output.content === 'string') {
+          generatedText = output.content;
+        } else if (typeof output.text === 'string') {
+          generatedText = output.text;
+        } else if (output.message && typeof output.message.content === 'string') {
+          generatedText = output.message.content;
+        }
+      } else if (Array.isArray(output)) {
+        for (const item of output) {
+          if (!item) continue;
+          if (typeof item === 'string') generatedText += item;
+          else if (typeof item === 'object') {
+            if (typeof item.content === 'string') generatedText += item.content;
+            else if (typeof item.text === 'string') generatedText += item.text;
+            else if (Array.isArray(item.content)) {
+              for (const c of item.content) {
+                if (typeof c === 'string') generatedText += c;
+                else if (typeof c.text === 'string') generatedText += c.text;
+              }
+            } else if (item.message && typeof item.message.content === 'string') {
+              generatedText += item.message.content;
+            }
+          }
+        }
+      }
 
       logger.info('AI response received', {
         responseLength: generatedText.length

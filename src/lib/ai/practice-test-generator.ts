@@ -1,4 +1,4 @@
-import { GoogleGenerativeAI } from '@google/generative-ai';
+import Bytez from 'bytez.js';
 import { logger } from '@/lib/winston';
 
 export interface PracticeTestOptions {
@@ -45,7 +45,8 @@ export interface PracticeTestResult {
 }
 
 export class PracticeTestGenerator {
-  private genAI: GoogleGenerativeAI;
+  private genAI: any;
+  private fallbackModels: string[];
 
   constructor() {
     const apiKey = process.env.GOOGLE_AI_API_KEY_PRACTICE_TEST || process.env.GOOGLE_AI_API_KEY;
@@ -60,7 +61,13 @@ export class PracticeTestGenerator {
       keyLength: apiKey.length
     });
     
-    this.genAI = new GoogleGenerativeAI(apiKey);
+    // Initialize Bytez client with the practice test API key
+    this.genAI = new Bytez(apiKey);
+    this.fallbackModels = [
+      'openai/gpt-4.1',
+      'openai-community/gpt2',
+      'google/gemma-3-1b-it'
+    ];
   }
 
   async generatePracticeTest(options: PracticeTestOptions): Promise<PracticeTestResult> {
@@ -82,16 +89,6 @@ export class PracticeTestGenerator {
       throw new Error('Content too long. Please limit to 100,000 characters');
     }
 
-    const model = this.genAI.getGenerativeModel({
-      model: "gemini-2.0-flash-exp",
-      generationConfig: {
-        temperature: 0.2,
-        topP: 0.9,
-        topK: 2000,
-        maxOutputTokens: 8000,
-      }
-    });
-
     const prompt = this.createPrompt(
       content,
       title,
@@ -103,7 +100,7 @@ export class PracticeTestGenerator {
     );
 
     try {
-      logger.info('Generating practice test with AI', {
+      logger.info('Generating practice test with Bytez/OpenAI GPT-4.1', {
         contentLength: content.length,
         maxQuestions,
         difficulty,
@@ -111,9 +108,53 @@ export class PracticeTestGenerator {
         includeWritten
       });
 
-      const result = await model.generateContent(prompt);
-      const response = await result.response;
-      const generatedText = response.text();
+      // Use Bytez SDK to call model openai/gpt-4.1
+      const model = this.genAI.model('openai/gpt-4.1');
+      const res: any = await model.run([
+        {
+          role: 'user',
+          content: prompt
+        }
+      ]);
+
+      if (res?.error) {
+        throw new Error(`Model error: ${JSON.stringify(res.error)}`);
+      }
+
+      // Normalize output - Bytez returns { output: { role: 'assistant', content: 'text' } }
+      let generatedText = '';
+      const output = res?.output;
+      
+      if (!output) {
+        generatedText = '';
+      } else if (typeof output === 'string') {
+        generatedText = output;
+      } else if (typeof output === 'object' && !Array.isArray(output)) {
+        if (typeof output.content === 'string') {
+          generatedText = output.content;
+        } else if (typeof output.text === 'string') {
+          generatedText = output.text;
+        } else if (output.message && typeof output.message.content === 'string') {
+          generatedText = output.message.content;
+        }
+      } else if (Array.isArray(output)) {
+        for (const item of output) {
+          if (!item) continue;
+          if (typeof item === 'string') generatedText += item;
+          else if (typeof item === 'object') {
+            if (typeof item.content === 'string') generatedText += item.content;
+            else if (typeof item.text === 'string') generatedText += item.text;
+            else if (Array.isArray(item.content)) {
+              for (const c of item.content) {
+                if (typeof c === 'string') generatedText += c;
+                else if (typeof c.text === 'string') generatedText += c.text;
+              }
+            } else if (item.message && typeof item.message.content === 'string') {
+              generatedText += item.message.content;
+            }
+          }
+        }
+      }
 
       logger.info('AI response received for practice test', {
         responseLength: generatedText.length
@@ -122,10 +163,29 @@ export class PracticeTestGenerator {
       const parsedResult = this.parseAIResponse(generatedText);
       this.validateResult(parsedResult);
 
+      // Enforce exact question counts
+      const targetMcCount = includeMultipleChoice ? (includeWritten ? Math.ceil(maxQuestions * 0.7) : maxQuestions) : 0;
+      const targetWrittenCount = includeWritten ? (includeMultipleChoice ? maxQuestions - targetMcCount : maxQuestions) : 0;
+
+      // Trim or keep questions to match requested count
+      if (parsedResult.multipleChoiceQuestions.length > targetMcCount) {
+        parsedResult.multipleChoiceQuestions = parsedResult.multipleChoiceQuestions.slice(0, targetMcCount);
+      }
+      if (parsedResult.writtenQuestions.length > targetWrittenCount) {
+        parsedResult.writtenQuestions = parsedResult.writtenQuestions.slice(0, targetWrittenCount);
+      }
+
+      // Recalculate total points after trimming
+      const mcPoints = parsedResult.multipleChoiceQuestions.reduce((sum: number, q: any) => sum + (q.points || 2), 0);
+      const writtenPoints = parsedResult.writtenQuestions.reduce((sum: number, q: any) => sum + (q.points || 5), 0);
+      parsedResult.totalPoints = mcPoints + writtenPoints;
+
       logger.info('Practice test generation completed successfully', {
         multipleChoiceCount: parsedResult.multipleChoiceQuestions.length,
         writtenCount: parsedResult.writtenQuestions.length,
-        totalPoints: parsedResult.totalPoints
+        totalPoints: parsedResult.totalPoints,
+        targetMcCount,
+        targetWrittenCount
       });
 
       return parsedResult;
@@ -149,8 +209,20 @@ export class PracticeTestGenerator {
     difficulty?: string,
     timeLimit?: number
   ): string {
-    const mcCount = Math.ceil((maxQuestions || 20) * 0.7); // 70% multiple choice
-    const writtenCount = Math.floor((maxQuestions || 20) * 0.3); // 30% written
+    const totalQuestions = maxQuestions || 20;
+    let mcCount = 0;
+    let writtenCount = 0;
+    
+    if (includeMultipleChoice && includeWritten) {
+      mcCount = Math.ceil(totalQuestions * 0.7); // 70% multiple choice
+      writtenCount = totalQuestions - mcCount; // remaining for written
+    } else if (includeMultipleChoice) {
+      mcCount = totalQuestions;
+      writtenCount = 0;
+    } else if (includeWritten) {
+      mcCount = 0;
+      writtenCount = totalQuestions;
+    }
 
     return `You are an expert educational assessment designer. Analyze the provided study material and create a comprehensive, high-quality practice test that effectively evaluates understanding.
 
@@ -233,13 +305,16 @@ OUTPUT FORMAT (JSON only, no markdown):
 }
 
 CRITICAL REQUIREMENTS:
-1. Generate exactly ${mcCount} multiple choice questions (if enabled)
-2. Generate exactly ${writtenCount} written questions (if enabled)
-3. Distribute difficulty: 40% easy, 40% medium, 20% hard
-4. Cover all major topics from the material
-5. Return ONLY valid JSON - no markdown, no code blocks, no extra text
-6. Start directly with { and end with }
-7. Calculate totalPoints as sum of all question points
+1. YOU MUST generate EXACTLY ${mcCount} multiple choice questions - no more, no less
+2. YOU MUST generate EXACTLY ${writtenCount} written questions - no more, no less
+3. TOTAL questions MUST be exactly ${totalQuestions}
+4. Distribute difficulty: 40% easy, 40% medium, 20% hard
+5. Cover all major topics from the material
+6. Return ONLY valid JSON - no markdown, no code blocks, no extra text
+7. Start directly with { and end with }
+8. Calculate totalPoints as sum of all question points
+
+IMPORTANT: The user requested exactly ${totalQuestions} questions total. You MUST provide exactly ${mcCount} multiple choice and ${writtenCount} written questions.
 
 Generate the practice test now:`;
   }

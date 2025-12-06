@@ -1,7 +1,6 @@
 /* Centralized styles for all student pages */
 @import "./navigation.css";
 @import "./dashboard/styles.css";
-@import "./public_library/styles.css";
 @import "./student_profile/profile.css";
 @import "./privacy_policy/privacy-policy.css";
 

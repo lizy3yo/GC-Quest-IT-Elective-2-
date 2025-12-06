@@ -11,8 +11,9 @@ import { authorize } from '@/lib/middleware/authorize';
  */
 export async function GET(
   request: NextRequest,
-  { params }: { params: Promise<{ classId: string; assessmentId: string }> }
+  context: any
 ) {
+  const params = await context.params;
   try {
     // Authenticate the user
     const authResult = await authenticate(request);
@@ -142,8 +143,8 @@ export async function GET(
 
       return {
         id: submission._id.toString(),
-        score: scorePercentage,
-        maxScore: 100,
+        score: submission.score || 0, // Use actual score, not percentage
+        maxScore: submission.maxScore || assessment.totalPoints || 100, // Use actual max score from submission or assessment
         status: submission.status,
         submittedAt: submission.submittedAt,
         timeSpent: submission.timeSpent,
@@ -155,13 +156,19 @@ export async function GET(
       };
     });
 
-    // Assessment info for results page (include full question details for review)
+    // Check if review is allowed
+    const allowReview = assessment.settings?.allowReview !== false; // Default to true if not set
+    
+    // Assessment info for results page (include full question details for review only if allowed)
     const assessmentInfo = {
       id: assessment._id.toString(),
       title: assessment.title,
       totalPoints: assessment.totalPoints,
+      maxAttempts: assessment.maxAttempts,
       dueDate: assessment.dueDate,
-      questions: assessment.questions.map((q: any) => ({
+      allowReview: allowReview,
+      // Only include questions if review is allowed
+      questions: allowReview ? assessment.questions.map((q: any) => ({
         id: q.id,
         type: q.type,
         title: q.title,
@@ -173,8 +180,28 @@ export async function GET(
         src: q.src, // For image questions
         alt: q.alt, // For image questions
         required: q.required
-      }))
+      })) : []
     };
+    
+    // If review is not allowed, keep summary stats but remove detailed answers
+    if (!allowReview) {
+      processedSubmissions.forEach((sub: any) => {
+        // Calculate stats before clearing
+        const correctCount = sub.gradedAnswers?.filter((a: any) => a.isCorrect).length || 0;
+        const incorrectCount = sub.gradedAnswers?.filter((a: any) => !a.isCorrect && !a.needsManualGrading).length || 0;
+        const totalQuestions = sub.gradedAnswers?.length || 0;
+        
+        // Store summary stats
+        sub.summaryStats = {
+          correctCount,
+          incorrectCount,
+          totalQuestions
+        };
+        
+        // Clear detailed answers
+        sub.gradedAnswers = [];
+      });
+    }
 
     return NextResponse.json({
       success: true,

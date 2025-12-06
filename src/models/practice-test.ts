@@ -41,6 +41,11 @@ export interface IPracticeTest extends Document {
   instructions: string;
   sourceType: 'flashcards' | 'upload' | 'paste' | 'mixed';
   sourceIds?: string[]; // flashcard set IDs if from flashcards
+  isFavorite?: boolean; // Mark as favorite for quick access
+  favoritedAt?: Date; // Timestamp when marked as favorite
+  isRead?: boolean; // Whether the practice test has been attempted
+  lastReadAt?: Date; // Timestamp when last attempted
+  folder?: string; // folder ID if organized in a folder
   createdAt: Date;
   updatedAt: Date;
   isPublic: boolean;
@@ -91,6 +96,11 @@ const PracticeTestSchema = new Schema<IPracticeTest>(
     instructions: { type: String, default: 'Answer all questions to the best of your ability.' },
     sourceType: { type: String, enum: ['flashcards', 'upload', 'paste', 'mixed'], required: true },
     sourceIds: { type: [String], default: [] },
+    isFavorite: { type: Boolean, default: false },
+    favoritedAt: { type: Date },
+    isRead: { type: Boolean, default: false },
+    lastReadAt: { type: Date },
+    folder: { type: String, ref: 'Folder' },
     isPublic: { type: Boolean, default: false },
     attempts: { type: Number, default: 0 },
     averageScore: { type: Number, min: 0, max: 100 },
@@ -104,10 +114,14 @@ const PracticeTestSchema = new Schema<IPracticeTest>(
 );
 
 // Indexes for efficient queries
-PracticeTestSchema.index({ userId: 1, createdAt: -1 });
-PracticeTestSchema.index({ userId: 1, subject: 1 });
-PracticeTestSchema.index({ isPublic: 1, subject: 1 });
-PracticeTestSchema.index({ shareLink: 1 });
-PracticeTestSchema.index({ 'sharedWith.userId': 1 });
+PracticeTestSchema.index({ userId: 1, createdAt: -1 }); // User's tests sorted
+PracticeTestSchema.index({ userId: 1, subject: 1 }); // Filter by subject
+PracticeTestSchema.index({ userId: 1, isFavorite: 1 }); // Favorite tests
+PracticeTestSchema.index({ isPublic: 1, subject: 1 }); // Public tests by subject
+// Note: shareLink already has index from unique: true, sparse: true
+PracticeTestSchema.index({ 'sharedWith.userId': 1 }); // Tests shared with user
+PracticeTestSchema.index({ folder: 1, userId: 1 }); // Folder organization
+PracticeTestSchema.index({ difficulty: 1, subject: 1 }); // Filter by difficulty
+PracticeTestSchema.index({ sourceType: 1, userId: 1 }); // Filter by source
 
 export const PracticeTest = mongoose.models.PracticeTest || mongoose.model<IPracticeTest>('PracticeTest', PracticeTestSchema);

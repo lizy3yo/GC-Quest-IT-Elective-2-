@@ -61,4 +61,11 @@ const folderSchema = new Schema<IFolder>({
     timestamps: true
 });
 
+// Indexes for query optimization
+folderSchema.index({ userId: 1, createdAt: -1 }); // User's folders sorted
+folderSchema.index({ userId: 1, category: 1 }); // Filter by category
+folderSchema.index({ accessType: 1 }); // Filter by access type
+folderSchema.index({ allowedUsers: 1 }); // Shared folders lookup
+folderSchema.index({ userId: 1, accessType: 1 }); // Compound for user's folders by access
+
 export default models.Folder || model<IFolder>('Folder', folderSchema);

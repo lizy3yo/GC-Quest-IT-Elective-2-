@@ -4,7 +4,8 @@ import { connectToDatabase } from "@/lib/mongoose";
 import { logger } from "@/lib/winston";
 import StudyProgress, { IStudyProgress } from "@/models/study_progress";
 
-export const GET = async (request: NextRequest, { params }: { params: Promise<{ flashcardId: string }> }) => {
+export const GET = async (request: NextRequest, context: any) => {
+  const params = await context.params;
   // ensure params is awaited (Next.js may provide a promise-like params)
   const { flashcardId } = await params;
   try {
@@ -35,7 +36,8 @@ export const GET = async (request: NextRequest, { params }: { params: Promise<{ 
   }
 };
 
-export const PATCH = async (request: NextRequest, { params }: { params: Promise<{ flashcardId: string }> }) => {
+export const PATCH = async (request: NextRequest, context: any) => {
+  const params = await context.params;
   // ensure params is awaited (Next.js may provide a promise-like params)
   const { flashcardId } = await params;
   try {

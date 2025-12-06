@@ -16,6 +16,8 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
+
+export const dynamic = 'force-dynamic';
 import bcrypt from 'bcrypt';
 import { Types } from 'mongoose'; 
 
@@ -25,6 +27,7 @@ import { logger } from '@/lib/winston';
 import config from '@/lib/config';
 import { connectToDatabase } from '@/lib/mongoose';
 import { validateEmail, validatePassword } from '@/lib/middleware/validation';
+
 
 //Models
 import User from '@/models/user';
@@ -78,6 +81,9 @@ export const GET = async (request: NextRequest) => {
 
         return new NextResponse(JSON.stringify({ flashcards }), {
             status: 200,
+            headers: {
+                'Cache-Control': 'no-store, no-cache, must-revalidate',
+            },
         });
 
     } catch (error) {
